@@ -2,6 +2,7 @@
 
 import { useRequireAuth } from '@/lib/auth/useRequireAuth';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { AppointmentCalendar } from '@/components/calendar/AppointmentCalendar';
 
 export default function CalendarPage() {
   const isReady = useRequireAuth();
@@ -12,9 +13,12 @@ export default function CalendarPage() {
   }
 
   return (
-    <main style={{ padding: '2rem' }}>
-      <button onClick={logout}>Log out</button>
-      <p>Calendar coming up next.</p>
+    <main className="calendar-page">
+      <header className="calendar-header">
+        <h1>Appointments</h1>
+        <button onClick={logout}>Log out</button>
+      </header>
+      <AppointmentCalendar />
     </main>
   );
 }
