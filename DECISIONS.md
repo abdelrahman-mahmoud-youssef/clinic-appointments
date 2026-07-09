@@ -420,12 +420,13 @@ it would add real surface area for a requirement nobody asked for here.
   benefit a second database would add here that per-test fixtures don't
   already provide — and a second database is one more thing to keep
   migrated and in sync.
-- **The BullMQ worker.** CLAUDE.md's stack list names Redis for "cache +
-  BullMQ + throttling"; only the cache half is built. There's no queue,
-  no worker process, and no job (e.g. appointment reminders) defined yet.
-  Redis is already wired up as a real dependency (`RedisModule`,
-  `AvailabilityService`'s cache, the graceful-degradation handling), so
-  adding BullMQ later is additive, not a restructure — but it stays
-  unbuilt for now rather than speculatively adding a queue with no real
-  job driving its design. Worth building only as a deliberate next step,
-  not bundled into this polish pass.
+- **The BullMQ worker.** Not built. CLAUDE.md's stack list mentions BullMQ
+  for background jobs (e.g. appointment reminders), but no such job is
+  part of this project's actual requirements — a queue and worker process
+  with nothing concrete to run through it is speculative infrastructure,
+  not a feature, and this project doesn't build speculative infrastructure
+  (see "no over-engineering" throughout this file). Redis is already a
+  real dependency here (`RedisModule`, `AvailabilityService`'s cache, the
+  graceful-degradation handling), so BullMQ would be additive — a new
+  module, not a restructure — the day an actual job needs it. Until then,
+  it's out of scope by design, not an unfinished corner of this one.
