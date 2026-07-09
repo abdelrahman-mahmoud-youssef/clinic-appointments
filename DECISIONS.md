@@ -45,3 +45,44 @@ Why each non-obvious choice was made. Newest at the bottom.
   back-to-back inserts (10:00-10:30, 10:30-11:00) — both succeed; same slot,
   different doctor, same clinic — both succeed; same slot+doctor after the
   first is CANCELLED — rebooking succeeds.
+
+## Auth: no refresh tokens
+
+- **Deliberately out of scope for this take-home.** `POST /auth/login` issues
+  a single JWT (12h expiry, `sub`/`clinicId`/`role` payload) with no refresh
+  or rotation mechanism. A real deployment needs short-lived access tokens
+  plus a refresh flow (and a revocation story); building that adds real
+  surface area — a token store, rotation logic, revocation on
+  logout/password-change — for a requirement nobody asked for here. Noted so
+  it isn't mistaken for an oversight.
+
+## Auth: clinicId and role come from the JWT payload, not re-derived from the DB
+
+- `JwtStrategy.validate()` re-fetches the user by `payload.sub` to confirm
+  they still exist (a deleted/deactivated account fails closed), but the
+  `clinicId` and `role` attached to `req.user` come from the signed token
+  itself, not the freshly-queried row. The token is the tenancy boundary
+  (CLAUDE.md rule 3) — it's cryptographically signed at login time from the
+  user's actual clinic/role, so trusting its claims for the lifetime of the
+  token is the point. `doctorId` isn't in the payload (JWT scope is
+  intentionally minimal) so it's the one field read fresh from the DB lookup.
+
+## Auth: role matrix (enforcement lands with the appointments module)
+
+Recorded now, enforced later via `@Roles()` on appointment routes:
+- **ADMIN** — anything within their clinic.
+- **RECEPTIONIST** — create, reschedule, list.
+- **DOCTOR** — change status on their own appointments (matched via the
+  `doctorId` on `req.user`), view.
+
+## Auth: ConfigModule for environment variables
+
+- Added `@nestjs/config` (`ConfigModule.forRoot({ isGlobal: true })`) rather
+  than a native-flag or hand-rolled dotenv approach. `JWT_SECRET` is the
+  first env var actually consumed by application code at runtime (previously
+  `DATABASE_URL` only mattered to the Prisma CLI). Node's native
+  `--env-file` flag would need threading through `nest start --watch`'s
+  spawned process and through `pnpm --filter` on Windows — fragile across
+  dev/build/start. `@nestjs/config` is the standard NestJS answer: one
+  dependency, works identically everywhere, `ConfigService.getOrThrow()`
+  fails fast at boot instead of booting with an undefined secret.
