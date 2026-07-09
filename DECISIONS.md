@@ -90,3 +90,34 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
   dev/build/start. `@nestjs/config` is the standard NestJS answer: one
   dependency, works identically everywhere, `ConfigService.getOrThrow()`
   fails fast at boot instead of booting with an undefined secret.
+
+## Appointments: doctor availability is a stub behind a clean seam
+
+- `DoctorsModule`/`AvailabilityService.isDoctorAvailable()` always returns
+  `true` — no working-hours, time-off, or existing-booking logic yet. It's a
+  real injected class, not a TODO comment or an inline `true`, so
+  `AppointmentsService` already calls it in the right place (before the
+  overlap check, on both create and reschedule) and the real
+  implementation drops in behind the same method signature later with zero
+  changes to `AppointmentsService` or its call sites.
+
+## Appointments: cross-clinic doctorId/patientId rejected on create
+
+- Beyond the literal spec: `create()` verifies `doctorId` and `patientId`
+  belong to the caller's `clinicId` before doing anything else. A Prisma
+  foreign key only proves the row exists, not that it belongs to this
+  clinic — without this check a receptionist could book an appointment
+  "in their clinic" against another clinic's doctor or patient, a real
+  tenancy hole rule 3/4 exist to prevent. Reuses `CrossTenantAccessError`
+  rather than adding a new domain error class for a case CLAUDE.md's
+  exhaustive list didn't enumerate.
+
+## Appointments: DOCTOR-must-own-the-appointment reuses CrossTenantAccessError
+
+- `changeStatus()` rejects a DOCTOR actor whose `doctorId` doesn't match
+  the appointment's doctor. This isn't literally cross-*tenant* (same
+  clinic, wrong doctor), but no domain error in CLAUDE.md's list fits
+  better, and adding a narrow new class for one call site would be
+  scope creep. `RolesGuard` only checks role membership (DOCTOR/ADMIN can
+  call the route); resource-level ownership is a business rule, so it
+  lives in the service, not the guard.
