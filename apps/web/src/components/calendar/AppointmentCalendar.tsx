@@ -10,6 +10,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
+import { StatusControl } from '@/components/appointments/StatusControl';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { STATUS_COLORS } from './statusColors';
@@ -47,6 +48,7 @@ export function AppointmentCalendar() {
   const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const reschedule = useRescheduleAppointment();
 
   const { data: appointments = [] } = useQuery({
@@ -99,6 +101,10 @@ export function AppointmentCalendar() {
     [reschedule],
   );
 
+  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    setSelectedAppointment(event.resource);
+  }, []);
+
   return (
     <>
       <div className="calendar-toolbar">
@@ -124,6 +130,7 @@ export function AppointmentCalendar() {
         eventPropGetter={eventPropGetter}
         selectable
         onSelectSlot={handleSelectSlot}
+        onSelectEvent={handleSelectEvent}
         onEventDrop={handleEventDrop}
         resizable={false}
         style={{ height: 700 }}
@@ -136,6 +143,9 @@ export function AppointmentCalendar() {
           defaultEnd={pendingSlot?.end}
           onClose={() => setIsCreating(false)}
         />
+      )}
+      {selectedAppointment && (
+        <StatusControl appointment={selectedAppointment} onClose={() => setSelectedAppointment(null)} />
       )}
     </>
   );
