@@ -52,6 +52,16 @@ export class AppointmentsRepository {
     return this.prisma.appointment.findFirst({ where: { id, clinicId } });
   }
 
+  async doctorBelongsToClinic(doctorId: string, clinicId: string): Promise<boolean> {
+    const count = await this.prisma.doctor.count({ where: { id: doctorId, clinicId } });
+    return count > 0;
+  }
+
+  async patientBelongsToClinic(patientId: string, clinicId: string): Promise<boolean> {
+    const count = await this.prisma.patient.count({ where: { id: patientId, clinicId } });
+    return count > 0;
+  }
+
   findOverlapping(query: OverlapQuery): Promise<Appointment[]> {
     return this.prisma.appointment.findMany({
       where: {
