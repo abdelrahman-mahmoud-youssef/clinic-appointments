@@ -233,3 +233,90 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
   split-shift lunch gap) — identical correct results both times, with the
   app logging repeated Redis connection warnings but never crashing or
   serving a wrong answer.
+
+## Frontend: hand-rolled Next.js scaffold, no UI framework
+
+- Same reasoning as the API: `create-next-app` fights a pnpm workspace
+  (its own git init, lockfile, ESLint config) more than it helps, and
+  most of its output would be deleted anyway.
+- No Tailwind/component library — plain `globals.css` with a handful of
+  reusable classes (`.modal`, `.form-error`, `.status-badge`,
+  `.filters-bar`). The API is the graded core; the frontend's job is to
+  make the features demonstrable, not to be elaborate, so a styling
+  framework's setup cost (config files, a new dependency, a new set of
+  conventions to follow correctly) wasn't worth paying for four pages.
+- `react-big-calendar` + `date-fns` (its documented localizer dependency)
+  for the calendar itself — the one place off-the-shelf really earns its
+  keep, since day/week/month views and drag-and-drop are exactly what it
+  exists to solve well.
+
+## Frontend: two new backend endpoints and CORS, beyond step 9's literal scope
+
+- `GET /doctors` and `GET /patients` (both clinic-scoped, no DTOs — thin
+  read-only lists, same layering as everything else) were added because
+  the appointment form and the doctor filter need *something* to
+  populate their dropdowns from, and no such endpoint existed. Without
+  them the form would need raw UUID text inputs, which would defeat the
+  actual point of building a frontend ("make the features demonstrable").
+- `app.enableCors()` (default: reflects any origin) was added to
+  `main.ts` — without it, every fetch from the web app (a different
+  origin/port: 3001 vs the API's 3000) is blocked by the browser before
+  it reaches a single controller. Fine for a take-home; a real
+  deployment would restrict this to the actual frontend origin(s)
+  instead of allowing any.
+
+## Frontend: JWT stored in localStorage, not an httpOnly cookie
+
+- Simpler for a demo app (no cookie-setting endpoint changes, no CSRF
+  token handling), but a real tradeoff worth naming: a token in
+  localStorage is readable by any JS running on the page, so an XSS bug
+  anywhere in the app could exfiltrate it. An httpOnly cookie set by the
+  API would close that specific hole at the cost of needing CSRF
+  protection instead. Not revisited here since the backend's login
+  endpoint already returns a bearer token in the response body (not a
+  cookie), matching how it was built in step 5.
+
+## Frontend: no session-expiry handling
+
+- The API issues a 12h JWT with no refresh (see the earlier "Auth: no
+  refresh tokens" decision). The frontend doesn't do anything special
+  when a request fails with 401 partway through a session — `apiFetch`
+  throws an `ApiError` like any other failure, which surfaces as a
+  generic error message rather than an automatic redirect to `/login`.
+  A production app would want a response interceptor that catches 401
+  specifically and forces a re-login. Not built here; noting the gap
+  rather than leaving it to be discovered.
+
+## Frontend: no clinic-timezone-aware display
+
+- Same simplification as the backend's availability check (see the
+  earlier "Doctor availability: weekday/time compared in UTC" decision):
+  `react-big-calendar` is handed plain JS `Date` objects built from the
+  API's UTC timestamps, so events render in whatever timezone the
+  *browser* is in, not the clinic's own `timezone` field. For a clinic
+  staff member sitting in the clinic's own timezone this happens to look
+  right by coincidence; it would not for a remote user in a different
+  timezone. Proper support needs the same `Intl.DateTimeFormat`-based
+  conversion flagged as out of scope on the backend.
+
+## Frontend: no automated test suite
+
+- Verification for every frontend commit was done live in a real browser
+  (Playwright driving an actual Chromium instance against the real API,
+  Postgres, and Redis — not component tests with mocked fetches),
+  documented in each commit message. No Jest/React Testing Library suite
+  was added for `apps/web`. Automated backend tests were the explicit
+  focus of step 7; the frontend's job per this step was to prove the
+  features work, which live end-to-end verification does more directly
+  than a mocked unit test would. Revisit if the frontend grows past a
+  handful of pages.
+
+## Frontend: broad, unscoped query invalidation after mutations
+
+- Every mutation (create, reschedule, status change) invalidates the
+  entire `['appointments']` query key space (`exact: false`) rather than
+  only the specific range/filter combination affected. Simpler than
+  computing which cached views could contain the changed appointment,
+  and at this app's scale (a handful of cached ranges per session) the
+  extra refetches are not a meaningful cost. A busier app with many
+  simultaneously-open views would want more targeted invalidation.
