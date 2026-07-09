@@ -4,8 +4,11 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 const SEED_PASSWORD = 'Password123!';
 
+const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
+
 async function main() {
   await prisma.appointment.deleteMany();
+  await prisma.doctorAvailability.deleteMany();
   await prisma.user.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.patient.deleteMany();
@@ -23,10 +26,20 @@ async function main() {
   for (const clinic of clinics) {
     const slug = clinic.name.toLowerCase().replace(/\s+/g, '-');
 
-    const [doctorLinked] = await Promise.all([
+    const [doctorLinked, doctorExtra] = await Promise.all([
       prisma.doctor.create({ data: { clinicId: clinic.id, name: `Dr. Alice (${clinic.name})` } }),
       prisma.doctor.create({ data: { clinicId: clinic.id, name: `Dr. Bob (${clinic.name})` } }),
     ]);
+
+    // Dr. Alice works a split shift (morning + afternoon, closed for lunch).
+    // Dr. Bob works a single block. Both Mon-Fri, demonstrating the two shapes.
+    await prisma.doctorAvailability.createMany({
+      data: WEEKDAYS_MON_FRI.flatMap((weekday) => [
+        { clinicId: clinic.id, doctorId: doctorLinked.id, weekday, startTime: '09:00', endTime: '12:00' },
+        { clinicId: clinic.id, doctorId: doctorLinked.id, weekday, startTime: '13:00', endTime: '17:00' },
+        { clinicId: clinic.id, doctorId: doctorExtra.id, weekday, startTime: '09:00', endTime: '17:00' },
+      ]),
+    });
 
     await Promise.all([
       prisma.patient.create({ data: { clinicId: clinic.id, name: `Patient One (${clinic.name})` } }),
