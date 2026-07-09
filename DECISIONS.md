@@ -75,6 +75,10 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
 - **DOCTOR** — change status on their own appointments (matched via the
   `doctorId` on `req.user`), view.
 
+## Auth: constant-time login
+
+- `login()` always runs `bcrypt.compare` (against a dummy hash when the email is unknown) so response time doesn't leak which emails are registered.
+
 ## Auth: ConfigModule for environment variables
 
 - Added `@nestjs/config` (`ConfigModule.forRoot({ isGlobal: true })`) rather

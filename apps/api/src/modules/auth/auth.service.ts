@@ -3,6 +3,10 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuthRepository } from './auth.repository';
 
+// Valid-format bcrypt hash with no known plaintext. Compared against when the
+// email is unknown so response time doesn't leak which emails are registered.
+const DUMMY_HASH = '$2b$10$A9eJ.PLI0Y9ys6j4vyK2M.0Jdr7UQYarixwnQ49auEkfWatgts9vS';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -12,7 +16,7 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<{ accessToken: string }> {
     const user = await this.authRepository.findByEmail(email);
-    const isValid = user ? await bcrypt.compare(password, user.hashedPassword) : false;
+    const isValid = await bcrypt.compare(password, user?.hashedPassword ?? DUMMY_HASH);
 
     if (!user || !isValid) {
       throw new UnauthorizedException('Invalid email or password');
