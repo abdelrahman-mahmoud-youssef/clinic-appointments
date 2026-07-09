@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { AppointmentStatus, Role } from '@clinic/shared';
+import { AvailabilityRepository } from '../doctors/availability.repository';
 import { AvailabilityService } from '../doctors/availability.service';
 import { AppointmentsRepository } from './appointments.repository';
 import { AppointmentsService } from './appointments.service';
@@ -9,10 +10,29 @@ import { CrossTenantAccessError, OverlappingAppointmentError } from '../../share
 // package.json's test:integration script). Fixtures are dedicated throwaway
 // clinics created in beforeAll and torn down in afterAll, so it's safe to
 // re-run repeatedly and never touches the seeded dev data.
+//
+// This file exercises overlap/concurrency/tenancy through the real
+// AvailabilityService, not a stub — but it deliberately doesn't stand up a real
+// Redis connection: caching behavior (hit, miss, Redis-down fallback) already has
+// its own dedicated unit tests, and a fake client whose commands always reject
+// exercises the exact same safeRedisCall fallback path deterministically, without
+// coupling this Postgres-focused suite to a second live service.
+const alwaysFailingRedis = {
+  get: () => Promise.reject(new Error('no redis in this test')),
+  set: () => Promise.reject(new Error('no redis in this test')),
+  del: () => Promise.reject(new Error('no redis in this test')),
+} as any;
+
 describe('Appointments integration (real Postgres)', () => {
   const prisma = new PrismaClient();
   const repository = new AppointmentsRepository(prisma as any);
-  const service = new AppointmentsService(repository, new AvailabilityService());
+  const availabilityService = new AvailabilityService(
+    new AvailabilityRepository(prisma as any),
+    alwaysFailingRedis,
+  );
+  const service = new AppointmentsService(repository, availabilityService);
+
+  const ALL_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
   let clinicA: { id: string };
   let clinicB: { id: string };
@@ -25,6 +45,19 @@ describe('Appointments integration (real Postgres)', () => {
     clinicB = await prisma.clinic.create({ data: { name: 'Integration Test Clinic B', timezone: 'UTC' } });
     doctorA = await prisma.doctor.create({ data: { clinicId: clinicA.id, name: 'Test Doctor A' } });
     patientA = await prisma.patient.create({ data: { clinicId: clinicA.id, name: 'Test Patient A' } });
+
+    // These tests exercise overlap/concurrency/tenancy, not working-hours logic
+    // (which has its own dedicated tests) — give doctorA an unrestricted week so
+    // availability never incidentally blocks a fixture appointment.
+    await prisma.doctorAvailability.createMany({
+      data: ALL_WEEKDAYS.map((weekday) => ({
+        clinicId: clinicA.id,
+        doctorId: doctorA.id,
+        weekday,
+        startTime: '00:00',
+        endTime: '23:59',
+      })),
+    });
   });
 
   afterEach(async () => {
@@ -32,6 +65,7 @@ describe('Appointments integration (real Postgres)', () => {
   });
 
   afterAll(async () => {
+    await prisma.doctorAvailability.deleteMany({ where: { clinicId: clinicA.id } });
     await prisma.doctor.deleteMany({ where: { clinicId: clinicA.id } });
     await prisma.patient.deleteMany({ where: { clinicId: clinicA.id } });
     await prisma.clinic.deleteMany({ where: { id: { in: [clinicA.id, clinicB.id] } } });
