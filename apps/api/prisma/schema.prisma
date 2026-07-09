@@ -30,10 +30,11 @@ model Clinic {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  users        User[]
-  doctors      Doctor[]
-  patients     Patient[]
-  appointments Appointment[]
+  users          User[]
+  doctors        Doctor[]
+  patients       Patient[]
+  appointments   Appointment[]
+  availabilities DoctorAvailability[]
 }
 
 model User {
@@ -59,11 +60,30 @@ model Doctor {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  clinic       Clinic        @relation(fields: [clinicId], references: [id])
-  user         User?
-  appointments Appointment[]
+  clinic         Clinic               @relation(fields: [clinicId], references: [id])
+  user           User?
+  appointments   Appointment[]
+  availabilities DoctorAvailability[]
 
   @@index([clinicId])
+}
+
+// Weekly recurring working hours. A doctor can have multiple rows per weekday
+// (split shifts, e.g. 09:00-12:00 and 13:00-17:00).
+model DoctorAvailability {
+  id        String   @id @default(uuid())
+  clinicId  String
+  doctorId  String
+  weekday   Int
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+
+  @@index([clinicId, doctorId, weekday])
 }
 
 model Patient {
