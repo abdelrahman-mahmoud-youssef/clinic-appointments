@@ -1,0 +1,29 @@
+import { Type } from 'class-transformer';
+import { IsDate, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsAfter, IsNotInPast } from './validators/time-range.validators';
+
+export class CreateAppointmentDto {
+  @IsUUID()
+  patientId!: string;
+
+  @IsUUID()
+  doctorId!: string;
+
+  @IsDate()
+  @Type(() => Date)
+  @IsNotInPast()
+  startsAt!: Date;
+
+  @IsDate()
+  @Type(() => Date)
+  @IsAfter('startsAt')
+  endsAt!: Date;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
