@@ -176,3 +176,60 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
   match that only covers one of the real failure modes. Without a test
   that exercises genuine concurrency (not just a sequential "insert one,
   then try to insert a conflicting one"), this gap would not have surfaced.
+
+## Doctor availability: containment is per-row, not per-union
+
+- `isWithinWorkingHours()` requires the appointment to fall fully inside a
+  **single** availability row for that weekday, not the union of the
+  doctor's rows for that day. This matches the spec's own framing (split
+  shifts) — a doctor working 09:00-12:00 and 13:00-17:00 is genuinely
+  unavailable during the 12:00-13:00 gap, so an appointment spanning
+  11:30-13:30 is correctly rejected even though 09:00-17:00 is "covered"
+  in aggregate. If two rows happen to be back-to-back with no gap, an
+  appointment straddling that exact boundary would be (rarely) rejected
+  too; merging contiguous rows into a wider window wasn't built since
+  nothing asked for it and it adds real interval-merging logic for an
+  edge case unlikely to occur in seeded or realistic data.
+
+## Doctor availability: weekday/time compared in UTC, not clinic-local time
+
+- `startsAt`/`endsAt` are stored as UTC timestamps; `isWithinWorkingHours`
+  compares their UTC weekday and UTC clock time directly against the
+  doctor's `HH:mm` rows, with no conversion through `Clinic.timezone`.
+  This is a real simplification, not silently swept under the rug: a
+  clinic whose local timezone isn't UTC would have its working-hours
+  windows effectively shifted by the UTC offset. Proper IANA-timezone-
+  aware conversion (`Intl.DateTimeFormat` with `clinic.timezone`) is a
+  legitimately bigger feature — value keyed by a compound
+  (weekday, minute-of-day) needs the clinic's civil time, not the
+  timestamp's UTC clock time, and DST transitions add real edge cases.
+  Not built because it wasn't asked for here; flagging it as a known gap
+  rather than a silent decision.
+
+## Doctor availability: Redis client is ioredis
+
+- Chosen over the official `redis` v4+ package because CLAUDE.md's stack
+  already lists BullMQ as a planned future piece, and BullMQ requires
+  ioredis specifically as its underlying client — picking it now avoids
+  two different Redis client libraries coexisting in the project later.
+- Critical, easy-to-miss detail: an ioredis client with no listener on its
+  `'error'` event throws an **unhandled exception and crashes the Node
+  process** the moment the connection fails, regardless of how carefully
+  every call site wraps its own commands in try/catch. `RedisModule`
+  attaches a `client.on('error', ...)` handler that just logs — without
+  it, CLAUDE.md rule 9 ("if Redis is down, correctness still holds") would
+  be false in the most dramatic way possible: the whole API would go down
+  with Redis, not just get slower.
+- `maxRetriesPerRequest: 1` makes individual commands fail fast (so
+  `safeRedisCall`'s try/catch returns quickly and falls through to
+  Postgres) rather than queuing and hanging while ioredis's own
+  reconnection logic runs in the background; `retryStrategy` still lets
+  the client keep attempting to reconnect on its own schedule so it
+  recovers automatically once Redis comes back.
+- Verified live, not just with mocks: booted the API with Redis up,
+  confirmed a cache key was populated with the correct TTL and content,
+  then stopped the Redis container entirely and re-ran the same three
+  HTTP requests (inside working hours, outside working hours, during the
+  split-shift lunch gap) — identical correct results both times, with the
+  app logging repeated Redis connection warnings but never crashing or
+  serving a wrong answer.
