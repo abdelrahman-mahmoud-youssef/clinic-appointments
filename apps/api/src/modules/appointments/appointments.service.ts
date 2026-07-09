@@ -164,8 +164,8 @@ export class AppointmentsService {
     endsAt: Date,
   ): Promise<void> {
     const isAvailable = await this.availabilityService.isDoctorAvailable(
-      doctorId,
       clinicId,
+      doctorId,
       startsAt,
       endsAt,
     );
