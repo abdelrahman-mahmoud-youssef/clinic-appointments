@@ -3,12 +3,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo } from 'react-big-calendar';
+import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
+import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
+import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { STATUS_COLORS } from './statusColors';
+import { ErrorBanner } from './ErrorBanner';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -31,6 +36,8 @@ interface CalendarEvent {
   resource: Appointment;
 }
 
+const DragAndDropCalendar = withDragAndDrop<CalendarEvent>(Calendar);
+
 function computeInitialRange(): DateRange {
   const now = new Date();
   return { from: startOfWeek(now), to: endOfWeek(now) };
@@ -40,6 +47,7 @@ export function AppointmentCalendar() {
   const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const reschedule = useRescheduleAppointment();
 
   const { data: appointments = [] } = useQuery({
     queryKey: ['appointments', range.from.toISOString(), range.to.toISOString()],
@@ -80,6 +88,17 @@ export function AppointmentCalendar() {
     setIsCreating(true);
   }, []);
 
+  const handleEventDrop = useCallback(
+    ({ event, start, end }: EventInteractionArgs<CalendarEvent>) => {
+      reschedule.mutate({
+        id: event.id,
+        startsAt: new Date(start).toISOString(),
+        endsAt: new Date(end).toISOString(),
+      });
+    },
+    [reschedule],
+  );
+
   return (
     <>
       <div className="calendar-toolbar">
@@ -93,7 +112,10 @@ export function AppointmentCalendar() {
           New appointment
         </button>
       </div>
-      <Calendar
+      {reschedule.isError && (
+        <ErrorBanner message={extractErrorMessage(reschedule.error)} onDismiss={() => reschedule.reset()} />
+      )}
+      <DragAndDropCalendar
         localizer={localizer}
         events={events}
         defaultView={Views.WEEK}
@@ -102,6 +124,8 @@ export function AppointmentCalendar() {
         eventPropGetter={eventPropGetter}
         selectable
         onSelectSlot={handleSelectSlot}
+        onEventDrop={handleEventDrop}
+        resizable={false}
         style={{ height: 700 }}
         startAccessor="start"
         endAccessor="end"

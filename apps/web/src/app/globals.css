@@ -69,6 +69,19 @@ label {
   margin-bottom: 0.75rem;
 }
 
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.error-banner button {
+  border-color: #fecaca;
+  background: white;
+  flex-shrink: 0;
+}
+
 .form-error {
   color: #dc2626;
   background: #fef2f2;
