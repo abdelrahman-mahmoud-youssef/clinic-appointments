@@ -46,6 +46,25 @@ Why each non-obvious choice was made. Newest at the bottom.
   different doctor, same clinic — both succeed; same slot+doctor after the
   first is CANCELLED — rebooking succeeds.
 
+## UTC timestamps, not date+time strings
+
+- `startsAt`/`endsAt` (and every other timestamp column) are stored as
+  `@db.Timestamptz(3)`, populated from ISO 8601 strings validated at the
+  DTO boundary (`@IsISO8601()`) and converted to `Date` before touching the
+  service layer. A "date + time-of-day string" representation (e.g.
+  separate `date: "2026-07-10"` and `time: "14:00"` fields, or a naive
+  timestamp with no offset) pushes timezone interpretation to whoever
+  reads the field next, and different readers can disagree. A single UTC
+  instant has one unambiguous meaning everywhere: in Postgres, in the API
+  response, and in the browser (which then renders it in local time —
+  see the frontend timezone-display decision below for where that
+  simplification currently stops).
+- This isn't just a style preference here: the exclusion constraint's
+  `tstzrange("startsAt", "endsAt")` *requires* a timezone-aware column to
+  even create the index (see the immutability error described above) —
+  so UTC timestamps aren't only cleaner, they're a precondition for the
+  double-booking guarantee working at all.
+
 ## Auth: no refresh tokens
 
 - **Deliberately out of scope for this take-home.** `POST /auth/login` issues
@@ -77,7 +96,46 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
 
 ## Auth: constant-time login
 
-- `login()` always runs `bcrypt.compare` (against a dummy hash when the email is unknown) so response time doesn't leak which emails are registered.
+- `login()` always runs `bcrypt.compare` — against the real user's hash
+  when the email exists, against a fixed dummy hash when it doesn't — so
+  both cases take the same amount of time and return the identical
+  generic "Invalid email or password" message. Without this, skipping the
+  (deliberately slow) bcrypt call on a missing user makes that response
+  measurably faster than a wrong-password response, which lets an
+  attacker enumerate which emails are registered purely by timing the
+  endpoint. This was caught and fixed as its own review pass, not written
+  correctly the first time — worth noting because it's an easy thing to
+  miss: the code "looks" secure (bcrypt, generic error message) while
+  still leaking through a side channel.
+
+## The status state machine
+
+```
+SCHEDULED  -> CONFIRMED | CANCELLED
+CONFIRMED  -> COMPLETED | CANCELLED | NO_SHOW
+COMPLETED, CANCELLED, NO_SHOW -> terminal
+```
+
+- The transition table (`ALLOWED_TRANSITIONS`) lives in `packages/shared`,
+  not duplicated between the API and the web app. The API's
+  `assertValidTransition()` wraps it to throw
+  `InvalidStatusTransitionError` (422) on an illegal move; the web app's
+  status control reads the identical table via `getAllowedNextStatuses()`
+  to decide which action buttons to show. One source of truth means the
+  UI can never offer a transition the backend would reject, and the two
+  can't quietly drift apart as the table changes.
+- It's a plain object literal, not a state-machine library — five states,
+  a handful of edges, no hierarchical/parallel states, no need for
+  anything heavier. `isTerminalStatus()` (derived from the same table:
+  a state with zero allowed next states is terminal) is what the
+  reschedule flow uses to reject rescheduling a
+  completed/cancelled/no-show appointment.
+- Deliberately a pure function with no I/O: given a current and a
+  requested status, it either does nothing or throws — trivially unit
+  tested without mocks, and safe to call before touching the database in
+  `changeStatus()`, so an illegal transition never reaches a write.
+
+## Auth: ConfigModule for environment variables
 
 ## Auth: ConfigModule for environment variables
 
@@ -320,3 +378,54 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
   and at this app's scale (a handful of cached ranges per session) the
   extra refetches are not a meaningful cost. A busier app with many
   simultaneously-open views would want more targeted invalidation.
+
+## What I deliberately left out, and why
+
+These are scope decisions, not gaps I didn't notice. Each was weighed
+against what this project needs to prove and left out because building
+it would add real surface area for a requirement nobody asked for here.
+
+- **Refresh tokens.** `POST /auth/login` issues one 12h JWT with no
+  refresh or rotation flow (full reasoning in "Auth: no refresh tokens"
+  above). A real deployment needs short-lived access tokens, a refresh
+  endpoint, and a revocation story for logout/password-change. That's a
+  second auth subsystem's worth of work for a take-home whose auth
+  requirement is "prove the tenancy boundary holds," not "build
+  production session management."
+- **Full RBAC granularity.** Roles are a fixed three-value enum
+  (`ADMIN`/`RECEPTIONIST`/`DOCTOR`) checked via `@Roles()` plus one
+  service-level ownership rule (a DOCTOR can only act on their own
+  appointments). There's no permission table, no custom roles, no
+  per-resource ACLs, no admin UI for managing any of that. The role
+  matrix in CLAUDE.md is small and fully enumerable; a generic
+  permissions system would be solving a problem this project doesn't
+  have, at the cost of every route needing to consult a runtime
+  permissions store instead of a compile-time-checked decorator.
+- **Microservices, CQRS/event-sourcing, GraphQL, hexagonal
+  ports-and-adapters.** None of these solve a problem this module
+  actually has — one bounded domain (appointments), one write model, one
+  small set of clients (a receptionist calendar and, eventually,
+  whatever else calls this API). Each of these patterns pays for itself
+  at a scale or complexity this project doesn't operate at; adding any of
+  them here would be optimizing for a hypothetical future system, not
+  the one that exists. (This mirrors CLAUDE.md's own "what we
+  deliberately do NOT build" list — repeated here because a reviewer
+  skimming this file shouldn't have to cross-reference another one to
+  find it.)
+- **A separate integration test database.** Integration tests run
+  against the same dev Postgres from `docker-compose`, not a dedicated
+  `clinic_test` database or container (full reasoning in "Tests: jest
+  config split" above). Each test file provisions and tears down its own
+  throwaway clinic/doctor/patient fixtures, so there's no isolation
+  benefit a second database would add here that per-test fixtures don't
+  already provide — and a second database is one more thing to keep
+  migrated and in sync.
+- **The BullMQ worker.** CLAUDE.md's stack list names Redis for "cache +
+  BullMQ + throttling"; only the cache half is built. There's no queue,
+  no worker process, and no job (e.g. appointment reminders) defined yet.
+  Redis is already wired up as a real dependency (`RedisModule`,
+  `AvailabilityService`'s cache, the graceful-degradation handling), so
+  adding BullMQ later is additive, not a restructure — but it stays
+  unbuilt for now rather than speculatively adding a queue with no real
+  job driving its design. Worth building only as a deliberate next step,
+  not bundled into this polish pass.
