@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { AppointmentStatus } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay } from 'date-fns';
@@ -15,6 +16,7 @@ import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { STATUS_COLORS } from './statusColors';
 import { ErrorBanner } from './ErrorBanner';
+import { FiltersBar } from './FiltersBar';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -49,14 +51,18 @@ export function AppointmentCalendar() {
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [doctorFilter, setDoctorFilter] = useState<string | undefined>();
+  const [statusFilter, setStatusFilter] = useState<AppointmentStatus | undefined>();
   const reschedule = useRescheduleAppointment();
 
   const { data: appointments = [] } = useQuery({
-    queryKey: ['appointments', range.from.toISOString(), range.to.toISOString()],
+    queryKey: ['appointments', range.from.toISOString(), range.to.toISOString(), doctorFilter, statusFilter],
     queryFn: () =>
       listAppointments({
         from: range.from.toISOString(),
         to: range.to.toISOString(),
+        doctorId: doctorFilter,
+        status: statusFilter,
       }),
   });
 
@@ -108,6 +114,12 @@ export function AppointmentCalendar() {
   return (
     <>
       <div className="calendar-toolbar">
+        <FiltersBar
+          doctorId={doctorFilter}
+          onDoctorIdChange={setDoctorFilter}
+          status={statusFilter}
+          onStatusChange={setStatusFilter}
+        />
         <button
           className="primary"
           onClick={() => {
