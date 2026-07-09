@@ -11,3 +11,5 @@ export enum Role {
   RECEPTIONIST = 'RECEPTIONIST',
   DOCTOR = 'DOCTOR',
 }
+
+export * from './appointment-status-transitions';
