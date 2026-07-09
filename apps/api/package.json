@@ -5,7 +5,9 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "test": "jest",
+    "test:integration": "node --env-file=.env node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand"
   },
   "dependencies": {
     "@clinic/shared": "workspace:*",
@@ -28,9 +30,12 @@
     "@nestjs/cli": "^11.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@types/passport-jwt": "^4.0.1",
+    "jest": "^30.4.2",
     "prisma": "^6.19.3",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.0"
   },
