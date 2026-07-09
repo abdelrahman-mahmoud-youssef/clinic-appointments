@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Mirrors @clinic/shared Role exactly.
+enum Role {
+  ADMIN
+  RECEPTIONIST
+  DOCTOR
+}
+
+// Mirrors @clinic/shared AppointmentStatus exactly.
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Clinic {
+  id        String   @id @default(uuid())
+  name      String
+  timezone  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  doctors      Doctor[]
+  patients     Patient[]
+  appointments Appointment[]
+}
+
+model User {
+  id             String   @id @default(uuid())
+  clinicId       String
+  email          String   @unique
+  hashedPassword String
+  role           Role
+  doctorId       String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clinic Clinic  @relation(fields: [clinicId], references: [id])
+  doctor Doctor? @relation(fields: [doctorId], references: [id])
+
+  @@index([clinicId])
+}
+
+model Doctor {
+  id        String   @id @default(uuid())
+  clinicId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  user         User?
+  appointments Appointment[]
+
+  @@index([clinicId])
+}
+
+model Patient {
+  id        String   @id @default(uuid())
+  clinicId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  appointments Appointment[]
+
+  @@index([clinicId])
+}
+
+model Appointment {
+  id        String            @id @default(uuid())
+  clinicId  String
+  patientId String
+  doctorId  String
+  startsAt  DateTime
+  endsAt    DateTime
+  status    AppointmentStatus @default(SCHEDULED)
+  reason    String?
+  notes     String?
+  createdBy String
+  updatedBy String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+
+  @@index([clinicId, doctorId, startsAt])
+  @@index([clinicId, startsAt])
+}
