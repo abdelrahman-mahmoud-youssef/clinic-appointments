@@ -121,3 +121,58 @@ Recorded now, enforced later via `@Roles()` on appointment routes:
   scope creep. `RolesGuard` only checks role membership (DOCTOR/ADMIN can
   call the route); resource-level ownership is a business rule, so it
   lives in the service, not the guard.
+
+## Tests: jest config split, unit vs integration
+
+- Two configs: `jest.config.js` (default, `pnpm test`) runs `*.spec.ts`
+  excluding `*.integration.spec.ts` — fast, no DB, safe to run anytime.
+  `jest.integration.config.js` (`pnpm test:integration`) runs only
+  `*.integration.spec.ts`, with `--runInBand` so multiple integration spec
+  files (if more are added later) don't run as concurrent workers against
+  the same live database and interfere with each other.
+- Both configs set `setupFiles: ['reflect-metadata']` — `@Injectable()`
+  classes get imported transitively by test files, and the decorator
+  metadata polyfill needs to load before that happens.
+- `test:integration` is `node --env-file=.env node_modules/jest/bin/jest.js
+  ...` rather than going through `@nestjs/config`: these tests instantiate
+  `PrismaClient`/`AppointmentsRepository` directly (no Nest app bootstrap,
+  matching the testing skill's "no TestingModule for service tests"
+  guidance), so nothing loads `.env` unless something does it explicitly.
+  Node's native `--env-file` flag is the plain, zero-dependency fit here —
+  no `nest start --watch` child-process spawning to fight, unlike the
+  earlier `ConfigModule` vs. native-flag tradeoff.
+- Integration tests run against the **same** dev Postgres from
+  docker-compose, not a separate test database — no new service, no extra
+  provisioning. Each test file creates its own dedicated throwaway
+  clinics/doctors/patients in `beforeAll`, cleans up appointments in
+  `afterEach`, and deletes everything in `afterAll`, so it never touches
+  the seeded dev data and is safe to re-run repeatedly.
+
+## Bug found by the concurrency test: deadlock is also a double-booking signal
+
+- The true-concurrency integration test (`Promise.allSettled` on two
+  simultaneous overlapping `create()` calls) was **flaky** against the
+  first version of `translateError`: it failed roughly half the time with
+  a raw, untranslated `PrismaClientUnknownRequestError` reaching the
+  caller instead of `OverlappingAppointmentError`.
+- Root cause, confirmed empirically (temporary debug logging, 10
+  repeated runs): under real concurrent inserts, Postgres's GiST
+  exclusion-constraint check can fail in **two** different ways depending
+  on which lock the two transactions contend over first — a clean
+  `23P01 conflicting key value violates exclusion constraint` (the shape
+  `translateError` already matched), or a `40P01 deadlock detected`
+  between the two transactions' index-page locks (a shape it didn't).
+  Both mean the exact same thing: the second insert cannot proceed
+  because it collides with the first.
+- Fix: `translateError` now also matches `deadlock detected` in the
+  message text, alongside the constraint name. This is safe specifically
+  because `create()`/`update()` each run a single INSERT/UPDATE with no
+  other locks in play in the same transaction — a deadlock here can only
+  be this race. A future repository method that takes additional locks in
+  the same transaction would need to reconsider this before reusing
+  `translateError` as-is.
+- This is exactly the kind of regression the constraint-translation
+  integration test exists to catch — a plausible-looking message-substring
+  match that only covers one of the real failure modes. Without a test
+  that exercises genuine concurrency (not just a sequential "insert one,
+  then try to insert a conflicting one"), this gap would not have surfaced.
