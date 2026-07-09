@@ -2,11 +2,12 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
+import { Calendar, dateFnsLocalizer, Views, SlotInfo } from 'react-big-calendar';
 import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
+import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
 import { STATUS_COLORS } from './statusColors';
 
 const localizer = dateFnsLocalizer({
@@ -37,6 +38,8 @@ function computeInitialRange(): DateRange {
 
 export function AppointmentCalendar() {
   const [range, setRange] = useState<DateRange>(computeInitialRange);
+  const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const { data: appointments = [] } = useQuery({
     queryKey: ['appointments', range.from.toISOString(), range.to.toISOString()],
@@ -72,17 +75,44 @@ export function AppointmentCalendar() {
     return { style: { backgroundColor: color, borderColor: color } };
   }, []);
 
+  const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
+    setPendingSlot({ start: slotInfo.start, end: slotInfo.end });
+    setIsCreating(true);
+  }, []);
+
   return (
-    <Calendar
-      localizer={localizer}
-      events={events}
-      defaultView={Views.WEEK}
-      views={[Views.DAY, Views.WEEK, Views.MONTH]}
-      onRangeChange={handleRangeChange}
-      eventPropGetter={eventPropGetter}
-      style={{ height: 700 }}
-      startAccessor="start"
-      endAccessor="end"
-    />
+    <>
+      <div className="calendar-toolbar">
+        <button
+          className="primary"
+          onClick={() => {
+            setPendingSlot(null);
+            setIsCreating(true);
+          }}
+        >
+          New appointment
+        </button>
+      </div>
+      <Calendar
+        localizer={localizer}
+        events={events}
+        defaultView={Views.WEEK}
+        views={[Views.DAY, Views.WEEK, Views.MONTH]}
+        onRangeChange={handleRangeChange}
+        eventPropGetter={eventPropGetter}
+        selectable
+        onSelectSlot={handleSelectSlot}
+        style={{ height: 700 }}
+        startAccessor="start"
+        endAccessor="end"
+      />
+      {isCreating && (
+        <AppointmentFormModal
+          defaultStart={pendingSlot?.start}
+          defaultEnd={pendingSlot?.end}
+          onClose={() => setIsCreating(false)}
+        />
+      )}
+    </>
   );
 }
