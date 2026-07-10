@@ -3,6 +3,7 @@ import { CrossTenantAccessError } from '../../shared/errors/domain-errors';
 import { ClinicsRepository } from './clinics.repository';
 
 export interface ClinicSettings {
+  name: string;
   dayStartHour: number;
   dayEndHour: number;
   timezone: string;
@@ -15,6 +16,7 @@ export class ClinicsService {
   async getSettings(clinicId: string): Promise<ClinicSettings> {
     const clinic = await this.getClinic(clinicId);
     return {
+      name: clinic.name,
       dayStartHour: clinic.dayStartHour,
       dayEndHour: clinic.dayEndHour,
       timezone: clinic.timezone,
@@ -32,6 +34,7 @@ export class ClinicsService {
   ): Promise<ClinicSettings> {
     const clinic = await this.clinicsRepository.updateSettings(clinicId, data);
     return {
+      name: clinic.name,
       dayStartHour: clinic.dayStartHour,
       dayEndHour: clinic.dayEndHour,
       timezone: clinic.timezone,
