@@ -7,6 +7,10 @@ import { listDoctors } from '@/lib/api/doctors';
 import { listPatients } from '@/lib/api/patients';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { toDateTimeLocalValue } from '@/lib/dateInput';
+import { Modal } from '@/components/ui/Modal';
+import { Field, Input, Select, Textarea } from '@/components/ui/FormControls';
+import { Button } from '@/components/ui/Button';
+import { Banner } from '@/components/ui/Banner';
 
 interface Props {
   onClose: () => void;
@@ -59,13 +63,10 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal" onClick={(event) => event.stopPropagation()} onSubmit={handleSubmit}>
-        <h2>New appointment</h2>
-
-        <label>
-          Patient
-          <select value={patientId} onChange={(event) => setPatientId(event.target.value)} required>
+    <Modal title="New appointment" onClose={onClose}>
+      <form onSubmit={handleSubmit}>
+        <Field label="Patient">
+          <Select value={patientId} onChange={(event) => setPatientId(event.target.value)} required>
             <option value="" disabled>
               Select a patient
             </option>
@@ -74,12 +75,11 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
                 {patient.name}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label>
-          Doctor
-          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} required>
+        <Field label="Doctor">
+          <Select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} required>
             <option value="" disabled>
               Select a doctor
             </option>
@@ -88,50 +88,47 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
                 {doctor.name}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label>
-          Start
-          <input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(event) => setStartsAt(event.target.value)}
-            required
-          />
-        </label>
+        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+          <Field label="Start">
+            <Input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(event) => setStartsAt(event.target.value)}
+              required
+            />
+          </Field>
 
-        <label>
-          End
-          <input
-            type="datetime-local"
-            value={endsAt}
-            onChange={(event) => setEndsAt(event.target.value)}
-            required
-          />
-        </label>
+          <Field label="End">
+            <Input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required />
+          </Field>
+        </div>
 
-        <label>
-          Reason
-          <input value={reason} onChange={(event) => setReason(event.target.value)} />
-        </label>
+        <Field label="Reason">
+          <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Checkup, follow-up..." />
+        </Field>
 
-        <label>
-          Notes
-          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
-        </label>
+        <Field label="Notes">
+          <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
+        </Field>
 
-        {create.isError && <p className="form-error">{extractErrorMessage(create.error)}</p>}
+        {create.isError && (
+          <div className="mb-3">
+            <Banner>{extractErrorMessage(create.error)}</Banner>
+          </div>
+        )}
 
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
+        <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="primary" disabled={create.isPending}>
-            {create.isPending ? 'Creating...' : 'Create'}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" disabled={create.isPending}>
+            {create.isPending ? 'Creating…' : 'Create appointment'}
+          </Button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
