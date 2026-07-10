@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { AppointmentStatus, getAllowedNextStatuses } from '@clinic/shared';
@@ -9,10 +9,11 @@ import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { useDirectory } from '@/lib/query/useDirectory';
 import { StatusBadge } from '@/components/calendar/StatusBadge';
 import { RoleGate } from '@/components/auth/RoleGate';
-import { CAN_CHANGE_STATUS } from '@/lib/auth/permissions';
+import { CAN_CHANGE_STATUS, CAN_BOOK } from '@/lib/auth/permissions';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Banner } from '@/components/ui/Banner';
+import { AppointmentFormModal } from './AppointmentFormModal';
 
 const ACTION_LABELS: Record<AppointmentStatus, string> = {
   [AppointmentStatus.SCHEDULED]: 'Mark scheduled',
@@ -41,6 +42,11 @@ export function AppointmentDetailsModal({
   const queryClient = useQueryClient();
   const { doctorName, patientName } = useDirectory();
   const allowedNext = getAllowedNextStatuses(appointment.status);
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return <AppointmentFormModal appointment={appointment} onClose={onClose} />;
+  }
 
   const changeStatus = useMutation({
     mutationFn: (status: AppointmentStatus) => changeAppointmentStatus(appointment.id, status),
@@ -102,10 +108,15 @@ export function AppointmentDetailsModal({
         </div>
       </RoleGate>
 
-      <div className="mt-5 flex justify-end">
+      <div className="mt-5 flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>
           Close
         </Button>
+        <RoleGate roles={CAN_BOOK}>
+          <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        </RoleGate>
       </div>
     </Modal>
   );

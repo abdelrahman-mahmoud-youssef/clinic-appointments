@@ -63,6 +63,10 @@ export function createAppointment(input: CreateAppointmentInput): Promise<Appoin
   return apiFetch('/appointments', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateAppointment(id: string, input: CreateAppointmentInput): Promise<Appointment> {
+  return apiFetch(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export interface RescheduleAppointmentInput {
   id: string;
   startsAt: string;

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createAppointment } from '@/lib/api/appointments';
+import { Appointment, createAppointment, updateAppointment } from '@/lib/api/appointments';
 import { listDoctors } from '@/lib/api/doctors';
 import { listPatients } from '@/lib/api/patients';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   defaultStart?: Date;
   defaultEnd?: Date;
+  appointment?: Appointment;
 }
 
 function defaultRange(): { start: Date; end: Date } {
@@ -27,30 +28,37 @@ function defaultRange(): { start: Date; end: Date } {
   return { start, end };
 }
 
-export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Props) {
+export function AppointmentFormModal({ onClose, defaultStart, defaultEnd, appointment }: Props) {
   const queryClient = useQueryClient();
   const fallback = defaultRange();
+  const editing = !!appointment;
 
   const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: listDoctors });
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: listPatients });
 
-  const [patientId, setPatientId] = useState('');
-  const [doctorId, setDoctorId] = useState('');
-  const [startsAt, setStartsAt] = useState(toDateTimeLocalValue(defaultStart ?? fallback.start));
-  const [endsAt, setEndsAt] = useState(toDateTimeLocalValue(defaultEnd ?? fallback.end));
-  const [reason, setReason] = useState('');
-  const [notes, setNotes] = useState('');
+  const [patientId, setPatientId] = useState(appointment?.patientId ?? '');
+  const [doctorId, setDoctorId] = useState(appointment?.doctorId ?? '');
+  const [startsAt, setStartsAt] = useState(
+    toDateTimeLocalValue(appointment ? new Date(appointment.startsAt) : defaultStart ?? fallback.start),
+  );
+  const [endsAt, setEndsAt] = useState(
+    toDateTimeLocalValue(appointment ? new Date(appointment.endsAt) : defaultEnd ?? fallback.end),
+  );
+  const [reason, setReason] = useState(appointment?.reason ?? '');
+  const [notes, setNotes] = useState(appointment?.notes ?? '');
 
-  const create = useMutation({
-    mutationFn: () =>
-      createAppointment({
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
         patientId,
         doctorId,
         startsAt: new Date(startsAt).toISOString(),
         endsAt: new Date(endsAt).toISOString(),
         reason: reason || undefined,
         notes: notes || undefined,
-      }),
+      };
+      return editing ? updateAppointment(appointment!.id, payload) : createAppointment(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'], exact: false });
       onClose();
@@ -59,11 +67,11 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    create.mutate();
+    save.mutate();
   }
 
   return (
-    <Modal title="New appointment" onClose={onClose}>
+    <Modal title={editing ? 'Edit appointment' : 'New appointment'} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <Field label="Patient">
           <Select value={patientId} onChange={(event) => setPatientId(event.target.value)} required>
@@ -114,9 +122,9 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
           <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
         </Field>
 
-        {create.isError && (
+        {save.isError && (
           <div className="mb-3">
-            <Banner>{extractErrorMessage(create.error)}</Banner>
+            <Banner>{extractErrorMessage(save.error)}</Banner>
           </div>
         )}
 
@@ -124,8 +132,14 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd }: Prop
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create appointment'}
+          <Button type="submit" variant="primary" disabled={save.isPending}>
+            {save.isPending
+              ? editing
+                ? 'Saving…'
+                : 'Creating…'
+              : editing
+                ? 'Save changes'
+                : 'Create appointment'}
           </Button>
         </div>
       </form>
