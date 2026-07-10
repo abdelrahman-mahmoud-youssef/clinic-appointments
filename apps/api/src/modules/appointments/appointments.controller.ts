@@ -9,6 +9,7 @@ import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { ListAppointmentsDto } from './dto/list-appointments.dto';
 import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
+import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
 @Controller('appointments')
 export class AppointmentsController {
@@ -46,6 +47,27 @@ export class AppointmentsController {
       clinicId,
       startsAt: dto.startsAt,
       endsAt: dto.endsAt,
+      actorUserId: user.id,
+    });
+  }
+
+  @Roles(Role.RECEPTIONIST, Role.ADMIN)
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentDto,
+    @ClinicId() clinicId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.appointmentsService.update({
+      id,
+      clinicId,
+      patientId: dto.patientId,
+      doctorId: dto.doctorId,
+      startsAt: dto.startsAt,
+      endsAt: dto.endsAt,
+      reason: dto.reason,
+      notes: dto.notes,
       actorUserId: user.id,
     });
   }

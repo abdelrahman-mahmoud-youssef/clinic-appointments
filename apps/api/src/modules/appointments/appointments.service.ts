@@ -31,6 +31,18 @@ interface RescheduleInput {
   actorUserId: string;
 }
 
+interface UpdateInput {
+  id: string;
+  clinicId: string;
+  patientId: string;
+  doctorId: string;
+  startsAt: Date;
+  endsAt: Date;
+  reason?: string;
+  notes?: string;
+  actorUserId: string;
+}
+
 interface ChangeStatusInput {
   id: string;
   clinicId: string;
@@ -123,6 +135,36 @@ export class AppointmentsService {
     const updated = await this.appointmentsRepository.update(appointment.id, input.clinicId, {
       startsAt: input.startsAt,
       endsAt: input.endsAt,
+      updatedBy: input.actorUserId,
+    });
+
+    return this.assertFound(updated, input.id);
+  }
+
+  async update(input: UpdateInput): Promise<Appointment> {
+    const appointment = await this.getOwnedAppointment(input.id, input.clinicId);
+
+    if (isTerminalStatus(appointment.status as AppointmentStatus)) {
+      throw new InvalidStatusTransitionError(`Cannot edit a ${appointment.status} appointment`);
+    }
+
+    await this.assertSameClinicReferences(input.clinicId, input.doctorId, input.patientId);
+    await this.assertDoctorAvailable(input.clinicId, input.doctorId, input.startsAt, input.endsAt);
+    await this.assertNoOverlap({
+      clinicId: input.clinicId,
+      doctorId: input.doctorId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      excludeAppointmentId: appointment.id,
+    });
+
+    const updated = await this.appointmentsRepository.update(appointment.id, input.clinicId, {
+      patient: { connect: { id: input.patientId } },
+      doctor: { connect: { id: input.doctorId } },
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      reason: input.reason,
+      notes: input.notes,
       updatedBy: input.actorUserId,
     });
 

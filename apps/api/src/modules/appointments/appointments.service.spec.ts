@@ -121,6 +121,39 @@ describe('AppointmentsService', () => {
     });
   });
 
+  describe('update', () => {
+    const editInput = {
+      id: 'appt-1',
+      clinicId: 'clinic-1',
+      patientId: 'patient-1',
+      doctorId: 'doctor-1',
+      startsAt: new Date('2027-02-01T10:00:00Z'),
+      endsAt: new Date('2027-02-01T10:30:00Z'),
+      actorUserId: 'user-1',
+    };
+
+    it('rejects editing a terminal appointment', async () => {
+      repo.findById.mockResolvedValue(buildAppointment({ status: AppointmentStatus.COMPLETED }));
+
+      await expect(service.update(editInput)).rejects.toThrow(InvalidStatusTransitionError);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('re-checks overlap excluding the appointment itself and persists', async () => {
+      const appointment = buildAppointment();
+      repo.findById.mockResolvedValue(appointment);
+      repo.findOverlapping.mockResolvedValue([]);
+      repo.update.mockResolvedValue({ ...appointment, reason: 'Updated' });
+
+      const result = await service.update({ ...editInput, reason: 'Updated' });
+
+      expect(repo.findOverlapping).toHaveBeenCalledWith(
+        expect.objectContaining({ excludeAppointmentId: 'appt-1' }),
+      );
+      expect(result.reason).toBe('Updated');
+    });
+  });
+
   describe('changeStatus', () => {
     it('rejects an illegal transition and never calls update', async () => {
       repo.findById.mockResolvedValue(buildAppointment({ status: AppointmentStatus.SCHEDULED }));
