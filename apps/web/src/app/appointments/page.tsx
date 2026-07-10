@@ -1,16 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, Role } from '@clinic/shared';
 import { format } from 'date-fns';
 import { useRequireAuth } from '@/lib/auth/useRequireAuth';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { listAppointments, Appointment } from '@/lib/api/appointments';
+import { listAppointments } from '@/lib/api/appointments';
 import { listDoctors } from '@/lib/api/doctors';
 import { useDirectory } from '@/lib/query/useDirectory';
 import { AppShell } from '@/components/layout/AppShell';
-import { AppointmentDetailsModal } from '@/components/appointments/AppointmentDetailsModal';
 import { StatusBadge } from '@/components/calendar/StatusBadge';
 import { Field, Select, Input } from '@/components/ui/FormControls';
 import { STATUS_LABELS } from '@/components/calendar/statusColors';
@@ -23,16 +23,26 @@ function toEnd(date: string): string | undefined {
   return date ? new Date(`${date}T23:59:59`).toISOString() : undefined;
 }
 
-export default function AppointmentsListPage() {
+function AppointmentsListInner() {
   const isReady = useRequireAuth();
   const { role } = useAuth();
   const { doctorName, patientName } = useDirectory();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const [doctorId, setDoctorId] = useState('');
-  const [status, setStatus] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [selected, setSelected] = useState<Appointment | null>(null);
+  const doctorId = searchParams.get('doctorId') ?? '';
+  const status = searchParams.get('status') ?? '';
+  const from = searchParams.get('from') ?? '';
+  const to = searchParams.get('to') ?? '';
+
+  function setFilter(key: string, value: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (value) next.set(key, value);
+    else next.delete(key);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   const showDoctorFilter = role !== Role.DOCTOR;
   const { data: doctors = [] } = useQuery({
@@ -69,7 +79,7 @@ export default function AppointmentsListPage() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
         {showDoctorFilter && (
           <Field label="Doctor" className="mb-0 sm:w-48">
-            <Select value={doctorId} onChange={(event) => setDoctorId(event.target.value)}>
+            <Select value={doctorId} onChange={(event) => setFilter('doctorId', event.target.value)}>
               <option value="">All doctors</option>
               {doctors.map((doctor) => (
                 <option key={doctor.id} value={doctor.id}>
@@ -80,7 +90,7 @@ export default function AppointmentsListPage() {
           </Field>
         )}
         <Field label="Status" className="mb-0 sm:w-44">
-          <Select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <Select value={status} onChange={(event) => setFilter('status', event.target.value)}>
             <option value="">All statuses</option>
             {Object.values(AppointmentStatus).map((value) => (
               <option key={value} value={value}>
@@ -90,10 +100,10 @@ export default function AppointmentsListPage() {
           </Select>
         </Field>
         <Field label="From" className="mb-0 sm:w-40">
-          <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <Input type="date" value={from} onChange={(event) => setFilter('from', event.target.value)} />
         </Field>
         <Field label="To" className="mb-0 sm:w-40">
-          <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <Input type="date" value={to} onChange={(event) => setFilter('to', event.target.value)} />
         </Field>
       </div>
 
@@ -123,7 +133,7 @@ export default function AppointmentsListPage() {
               appointments.map((appointment) => (
                 <tr
                   key={appointment.id}
-                  onClick={() => setSelected(appointment)}
+                  onClick={() => router.push(`/appointments/${appointment.id}`)}
                   className="cursor-pointer border-b border-line last:border-0 hover:bg-bg"
                 >
                   <td className="whitespace-nowrap px-4 py-3">
@@ -146,10 +156,18 @@ export default function AppointmentsListPage() {
           </tbody>
         </table>
       </div>
-
-      {selected && (
-        <AppointmentDetailsModal appointment={selected} onClose={() => setSelected(null)} />
-      )}
     </AppShell>
+  );
+}
+
+export default function AppointmentsListPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-ink-soft">Loading…</div>
+      }
+    >
+      <AppointmentsListInner />
+    </Suspense>
   );
 }

@@ -24,6 +24,10 @@ export interface ListAppointmentsParams {
   status?: AppointmentStatus;
 }
 
+export function getAppointment(id: string): Promise<Appointment> {
+  return apiFetch(`/appointments/${id}`);
+}
+
 export function listAppointments(params: ListAppointmentsParams = {}): Promise<Appointment[]> {
   const query = new URLSearchParams();
   if (params.from) query.set('from', params.from);
