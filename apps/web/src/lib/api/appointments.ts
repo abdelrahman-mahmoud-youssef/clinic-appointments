@@ -35,9 +35,15 @@ export function listAppointments(params: ListAppointmentsParams): Promise<Appoin
   return apiFetch(`/appointments?${query.toString()}`);
 }
 
+export interface DayBucket {
+  date: string;
+  active: number;
+}
+
 export interface AppointmentSummary {
   active: number;
   counts: Record<AppointmentStatus, number>;
+  byDay: DayBucket[];
 }
 
 export function getAppointmentSummary(params: { from: string; to: string }): Promise<AppointmentSummary> {

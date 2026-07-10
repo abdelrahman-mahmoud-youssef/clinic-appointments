@@ -11,6 +11,8 @@ import { getAppointmentSummary } from '@/lib/api/appointments';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { StatusBreakdown } from '@/components/dashboard/StatusBreakdown';
+import { WeeklyVolumeChart } from '@/components/dashboard/WeeklyVolumeChart';
+import { UpcomingList } from '@/components/dashboard/UpcomingList';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { CAN_BOOK } from '@/lib/auth/permissions';
 import { Button } from '@/components/ui/Button';
@@ -30,8 +32,9 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const range = useMemo(() => {
-    const from = startOfDay(new Date());
-    return { from, to: endOfDay(addDays(from, WINDOW_DAYS - 1)) };
+    const now = new Date();
+    const from = startOfDay(now);
+    return { from, to: endOfDay(addDays(from, WINDOW_DAYS - 1)), nowIso: now.toISOString() };
   }, []);
 
   const { data: summary, isLoading } = useQuery({
@@ -74,8 +77,15 @@ export default function DashboardPage() {
         <StatCard label="Completed" value={show(summary?.counts[AppointmentStatus.COMPLETED])} />
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <WeeklyVolumeChart data={summary?.byDay} />
+        </div>
         <StatusBreakdown counts={summary?.counts} />
+      </div>
+
+      <div className="mt-4">
+        <UpcomingList from={range.nowIso} to={range.to.toISOString()} />
       </div>
     </AppShell>
   );
