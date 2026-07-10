@@ -24,7 +24,7 @@ export class AvailabilityService {
     await this.safeRedisCall(() => this.redis.del(this.cacheKey(clinicId, doctorId)));
   }
 
-  private async getWorkingHours(clinicId: string, doctorId: string): Promise<WorkingHoursWindow[]> {
+  async getWorkingHours(clinicId: string, doctorId: string): Promise<WorkingHoursWindow[]> {
     const cached = await this.safeRedisCall(() => this.redis.get(this.cacheKey(clinicId, doctorId)));
     if (cached) {
       const parsed = this.tryParse(cached);
