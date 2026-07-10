@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
@@ -83,17 +84,34 @@ function computeInitialRange(): DateRange {
 }
 
 export function AppointmentCalendar() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [range, setRange] = useState<DateRange>(computeInitialRange);
+  const [date, setDate] = useState<Date>(() => new Date());
   const [view, setView] = useState<View>(Views.WEEK);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [doctorFilter, setDoctorFilter] = useState<string | undefined>();
-  const [statusFilter, setStatusFilter] = useState<AppointmentStatus | undefined>();
   const [closedSlotNotice, setClosedSlotNotice] = useState<string | null>(null);
   const { role } = useAuth();
   const canBook = role ? CAN_BOOK.includes(role) : false;
   const reschedule = useRescheduleAppointment();
+
+  const doctorFilter = searchParams.get('doctorId') || undefined;
+  const statusFilter = (searchParams.get('status') as AppointmentStatus | null) || undefined;
+
+  const setFilter = useCallback(
+    (key: string, value: string | undefined) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (value) next.set(key, value);
+      else next.delete(key);
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   // Default to Day view on narrow screens. Adjusted after mount, not during
   // the initial render, so the server-rendered markup and the first client
@@ -215,9 +233,9 @@ export function AppointmentCalendar() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <FiltersBar
           doctorId={doctorFilter}
-          onDoctorIdChange={setDoctorFilter}
+          onDoctorIdChange={(value) => setFilter('doctorId', value)}
           status={statusFilter}
-          onStatusChange={setStatusFilter}
+          onStatusChange={(value) => setFilter('status', value)}
         />
         <RoleGate roles={CAN_BOOK}>
           <Button
@@ -246,6 +264,8 @@ export function AppointmentCalendar() {
         <DragAndDropCalendar
           localizer={localizer}
           events={events}
+          date={date}
+          onNavigate={(nextDate) => setDate(nextDate)}
           view={view}
           onView={(nextView) => setView(nextView)}
           views={CALENDAR_VIEWS}
