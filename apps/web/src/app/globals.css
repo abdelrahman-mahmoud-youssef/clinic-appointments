@@ -134,6 +134,17 @@
     height: 2px;
   }
 
+  .calendar-bookable .rbc-time-slot:not(.slot-closed),
+  .calendar-bookable .rbc-day-bg:not(.slot-closed):not(.rbc-off-range-bg) {
+    cursor: pointer;
+  }
+
+  .calendar-bookable .rbc-time-slot:not(.slot-closed):hover,
+  .calendar-bookable .rbc-day-bg:not(.slot-closed):not(.rbc-off-range-bg):hover {
+    background-color: var(--color-brand-soft);
+    box-shadow: inset 0 0 0 1px var(--color-brand);
+  }
+
   .rbc-off-range {
     color: var(--color-ink-faint);
   }

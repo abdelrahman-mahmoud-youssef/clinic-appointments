@@ -238,7 +238,11 @@ export function AppointmentCalendar() {
       )}
       {closedSlotNotice && <Banner onDismiss={() => setClosedSlotNotice(null)}>{closedSlotNotice}</Banner>}
 
-      <div className="h-[520px] overflow-hidden rounded-lg border border-line bg-surface p-2 sm:h-[640px] sm:p-4">
+      <div
+        className={`h-[520px] overflow-hidden rounded-lg border border-line bg-surface p-2 sm:h-[640px] sm:p-4${
+          canBook ? ' calendar-bookable' : ''
+        }`}
+      >
         <DragAndDropCalendar
           localizer={localizer}
           events={events}
