@@ -1,199 +1,89 @@
-* {
-  box-sizing: border-box;
+@import 'tailwindcss';
+
+@theme {
+  /* Core palette */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-ink: #1b2430;
+  --color-ink-soft: #5b6472;
+  --color-ink-faint: #8b93a1;
+  --color-brand: #0f6e63;
+  --color-brand-hover: #0b564d;
+  --color-brand-soft: #e3f1ee;
+  --color-line: #e3e6eb;
+  --color-line-strong: #cbd0d8;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbeae9;
+
+  /* Appointment status palette — deliberately distinct from --color-brand
+     so "this is clickable" and "this is a status" never look the same. */
+  --color-status-scheduled: #64748b;
+  --color-status-confirmed: #3b6fd9;
+  --color-status-completed: #1e9e6b;
+  --color-status-cancelled: #d1495b;
+  --color-status-no-show: #c97a2b;
+
+  /* Typography */
+  --font-display: var(--font-display), 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-body: var(--font-body), 'Inter', ui-sans-serif, sans-serif;
+  --font-data: var(--font-data), 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
-body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  color: #1e293b;
-  background: #f8fafc;
-}
-
-a {
-  color: inherit;
-}
-
-button {
-  font-family: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: white;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-}
-
-button:hover {
-  background: #f1f5f9;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-button.primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: white;
-}
-
-button.primary:hover {
-  background: #1d4ed8;
-}
-
-input,
-select,
-textarea {
-  font-family: inherit;
-  font-size: 0.9rem;
-  padding: 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  width: 100%;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 0.75rem;
-}
-
-.error-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.error-banner button {
-  border-color: #fecaca;
-  background: white;
-  flex-shrink: 0;
-}
-
-.form-error {
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  margin: 0.5rem 0;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal {
-  background: white;
-  border-radius: 10px;
-  padding: 1.5rem;
-  width: min(420px, 90vw);
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: white;
-}
-
-.status-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0;
-}
-
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-form {
-  background: white;
-  border-radius: 10px;
-  padding: 2rem;
-  width: min(360px, 90vw);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-}
-
-.login-form h1 {
-  font-size: 1.25rem;
-  margin: 0 0 1.5rem;
-}
-
-.login-form button {
-  width: 100%;
-  margin-top: 0.5rem;
-}
-
-.calendar-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem;
-}
-
-.calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.calendar-header h1 {
-  font-size: 1.25rem;
-  margin: 0;
-}
-
-.calendar-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.filters-bar {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.filters-bar label {
-  min-width: 160px;
-  margin-bottom: 0;
+@layer components {
+  /* The signature: closed/unavailable calendar slots read as a scheduling
+     ledger's "void" entries — a fine diagonal hatch, not a flat grey box. */
+  .slot-closed {
+    background-image: repeating-linear-gradient(
+      135deg,
+      var(--color-line) 0px,
+      var(--color-line) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+    background-color: #eef0f3;
+    cursor: not-allowed;
+  }
 }
