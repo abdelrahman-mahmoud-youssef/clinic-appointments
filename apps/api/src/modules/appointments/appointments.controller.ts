@@ -69,9 +69,32 @@ export class AppointmentsController {
   }
 
   @Get()
-  list(@Query() query: ListAppointmentsDto, @ClinicId() clinicId: string) {
+  list(
+    @Query() query: ListAppointmentsDto,
+    @ClinicId() clinicId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.appointmentsService.list({
       clinicId,
+      actorRole: user.role,
+      actorDoctorId: user.doctorId,
+      doctorId: query.doctorId,
+      from: query.from,
+      to: query.to,
+      status: query.status,
+    });
+  }
+
+  @Get('summary')
+  summary(
+    @Query() query: ListAppointmentsDto,
+    @ClinicId() clinicId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.appointmentsService.summarize({
+      clinicId,
+      actorRole: user.role,
+      actorDoctorId: user.doctorId,
       doctorId: query.doctorId,
       from: query.from,
       to: query.to,

@@ -41,11 +41,28 @@ interface ChangeStatusInput {
 
 interface ListFilters {
   clinicId: string;
+  actorRole: Role;
+  actorDoctorId?: string;
   doctorId?: string;
   from?: Date;
   to?: Date;
   status?: AppointmentStatus;
 }
+
+interface RepositoryListFilters {
+  clinicId: string;
+  doctorId?: string;
+  from?: Date;
+  to?: Date;
+  status?: AppointmentStatus;
+}
+
+export interface AppointmentSummary {
+  active: number;
+  counts: Record<AppointmentStatus, number>;
+}
+
+const TERMINAL_INACTIVE: AppointmentStatus[] = [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW];
 
 @Injectable()
 export class AppointmentsService {
@@ -124,7 +141,35 @@ export class AppointmentsService {
   }
 
   list(filters: ListFilters): Promise<Appointment[]> {
-    return this.appointmentsRepository.list(filters);
+    const scoped = this.scopeToActor(filters);
+    return scoped ? this.appointmentsRepository.list(scoped) : Promise.resolve([]);
+  }
+
+  async summarize(filters: ListFilters): Promise<AppointmentSummary> {
+    const appointments = await this.list(filters);
+    const counts = Object.values(AppointmentStatus).reduce(
+      (acc, status) => ({ ...acc, [status]: 0 }),
+      {} as Record<AppointmentStatus, number>,
+    );
+
+    let active = 0;
+    for (const appointment of appointments) {
+      const status = appointment.status as AppointmentStatus;
+      counts[status] += 1;
+      if (!TERMINAL_INACTIVE.includes(status)) {
+        active += 1;
+      }
+    }
+
+    return { active, counts };
+  }
+
+  private scopeToActor(filters: ListFilters): RepositoryListFilters | null {
+    const { actorRole, actorDoctorId, ...rest } = filters;
+    if (actorRole !== Role.DOCTOR) {
+      return rest;
+    }
+    return actorDoctorId ? { ...rest, doctorId: actorDoctorId } : null;
   }
 
   private async getOwnedAppointment(id: string, clinicId: string): Promise<Appointment> {

@@ -166,6 +166,58 @@ describe('AppointmentsService', () => {
     });
   });
 
+  describe('list scoping', () => {
+    it('forces a DOCTOR to their own appointments, ignoring the requested doctorId', async () => {
+      repo.list.mockResolvedValue([]);
+
+      await service.list({
+        clinicId: 'clinic-1',
+        actorRole: Role.DOCTOR,
+        actorDoctorId: 'doctor-1',
+        doctorId: 'doctor-2',
+      });
+
+      expect(repo.list).toHaveBeenCalledWith(
+        expect.objectContaining({ clinicId: 'clinic-1', doctorId: 'doctor-1' }),
+      );
+    });
+
+    it('returns nothing and never queries when a DOCTOR has no linked doctorId', async () => {
+      const result = await service.list({ clinicId: 'clinic-1', actorRole: Role.DOCTOR });
+
+      expect(result).toEqual([]);
+      expect(repo.list).not.toHaveBeenCalled();
+    });
+
+    it('lets an ADMIN filter by any doctorId', async () => {
+      repo.list.mockResolvedValue([]);
+
+      await service.list({ clinicId: 'clinic-1', actorRole: Role.ADMIN, doctorId: 'doctor-2' });
+
+      expect(repo.list).toHaveBeenCalledWith(
+        expect.objectContaining({ clinicId: 'clinic-1', doctorId: 'doctor-2' }),
+      );
+    });
+  });
+
+  describe('summarize', () => {
+    it('counts by status and excludes terminal states from the active total', async () => {
+      repo.list.mockResolvedValue([
+        buildAppointment({ status: AppointmentStatus.SCHEDULED }),
+        buildAppointment({ status: AppointmentStatus.CONFIRMED }),
+        buildAppointment({ status: AppointmentStatus.CANCELLED }),
+        buildAppointment({ status: AppointmentStatus.NO_SHOW }),
+      ]);
+
+      const summary = await service.summarize({ clinicId: 'clinic-1', actorRole: Role.ADMIN });
+
+      expect(summary.active).toBe(2);
+      expect(summary.counts[AppointmentStatus.SCHEDULED]).toBe(1);
+      expect(summary.counts[AppointmentStatus.CANCELLED]).toBe(1);
+      expect(summary.counts[AppointmentStatus.COMPLETED]).toBe(0);
+    });
+  });
+
   describe('cross-clinic access', () => {
     it('throws CrossTenantAccessError when the repository finds nothing in this clinic', async () => {
       repo.findById.mockResolvedValue(null);
