@@ -8,6 +8,7 @@ import {
   OverlappingAppointmentError,
 } from '../../shared/errors/domain-errors';
 import { AvailabilityService } from '../doctors/availability.service';
+import { ClinicsService } from '../clinics/clinics.service';
 import { AppointmentsRepository } from './appointments.repository';
 import { assertValidTransition, isTerminalStatus } from './domain/appointment-status.machine';
 
@@ -57,10 +58,18 @@ interface RepositoryListFilters {
   status?: AppointmentStatus;
 }
 
+export interface DayBucket {
+  date: string;
+  active: number;
+}
+
 export interface AppointmentSummary {
   active: number;
   counts: Record<AppointmentStatus, number>;
+  byDay: DayBucket[];
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const TERMINAL_INACTIVE: AppointmentStatus[] = [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW];
 
@@ -69,6 +78,7 @@ export class AppointmentsService {
   constructor(
     private readonly appointmentsRepository: AppointmentsRepository,
     private readonly availabilityService: AvailabilityService,
+    private readonly clinicsService: ClinicsService,
   ) {}
 
   async create(input: CreateAppointmentInput): Promise<Appointment> {
@@ -161,7 +171,47 @@ export class AppointmentsService {
       }
     }
 
-    return { active, counts };
+    const timezone = await this.clinicsService.getTimezone(filters.clinicId);
+    const byDay = this.bucketActiveByDay(appointments, filters.from, filters.to, timezone);
+
+    return { active, counts, byDay };
+  }
+
+  private bucketActiveByDay(
+    appointments: Appointment[],
+    from: Date | undefined,
+    to: Date | undefined,
+    timeZone: string,
+  ): DayBucket[] {
+    if (!from || !to) {
+      return [];
+    }
+
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+
+    const active = new Map<string, number>();
+    for (const appointment of appointments) {
+      if (TERMINAL_INACTIVE.includes(appointment.status as AppointmentStatus)) {
+        continue;
+      }
+      const key = formatter.format(appointment.startsAt);
+      active.set(key, (active.get(key) ?? 0) + 1);
+    }
+
+    const days: DayBucket[] = [];
+    for (let time = from.getTime(); time <= to.getTime(); time += DAY_MS) {
+      const date = formatter.format(new Date(time));
+      if (days.length > 0 && days[days.length - 1].date === date) {
+        continue;
+      }
+      days.push({ date, active: active.get(date) ?? 0 });
+    }
+    return days;
   }
 
   private scopeToActor(filters: ListFilters): RepositoryListFilters | null {

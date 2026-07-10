@@ -41,15 +41,21 @@ function createAvailabilityMock() {
   return { isDoctorAvailable: jest.fn() };
 }
 
+function createClinicsMock() {
+  return { getTimezone: jest.fn().mockResolvedValue('UTC') };
+}
+
 describe('AppointmentsService', () => {
   let repo: ReturnType<typeof createRepositoryMock>;
   let availability: ReturnType<typeof createAvailabilityMock>;
+  let clinics: ReturnType<typeof createClinicsMock>;
   let service: AppointmentsService;
 
   beforeEach(() => {
     repo = createRepositoryMock();
     availability = createAvailabilityMock();
-    service = new AppointmentsService(repo as any, availability as any);
+    clinics = createClinicsMock();
+    service = new AppointmentsService(repo as any, availability as any, clinics as any);
     repo.doctorBelongsToClinic.mockResolvedValue(true);
     repo.patientBelongsToClinic.mockResolvedValue(true);
     availability.isDoctorAvailable.mockResolvedValue(true);
@@ -215,6 +221,26 @@ describe('AppointmentsService', () => {
       expect(summary.counts[AppointmentStatus.SCHEDULED]).toBe(1);
       expect(summary.counts[AppointmentStatus.CANCELLED]).toBe(1);
       expect(summary.counts[AppointmentStatus.COMPLETED]).toBe(0);
+    });
+
+    it('buckets active appointments per day across the window', async () => {
+      repo.list.mockResolvedValue([
+        buildAppointment({ startsAt: new Date('2027-01-04T10:00:00Z'), status: AppointmentStatus.SCHEDULED }),
+        buildAppointment({ startsAt: new Date('2027-01-04T14:00:00Z'), status: AppointmentStatus.CONFIRMED }),
+        buildAppointment({ startsAt: new Date('2027-01-05T09:00:00Z'), status: AppointmentStatus.CANCELLED }),
+      ]);
+
+      const summary = await service.summarize({
+        clinicId: 'clinic-1',
+        actorRole: Role.ADMIN,
+        from: new Date('2027-01-04T00:00:00Z'),
+        to: new Date('2027-01-05T23:59:59Z'),
+      });
+
+      expect(summary.byDay).toEqual([
+        { date: '2027-01-04', active: 2 },
+        { date: '2027-01-05', active: 0 },
+      ]);
     });
   });
 
