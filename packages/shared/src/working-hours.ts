@@ -10,8 +10,10 @@ function toMinutes(time: string): number {
 }
 
 // True when [startsAt, endsAt) falls fully inside a single working-hours row
-// for that weekday. An appointment spanning midnight (different UTC weekday
-// for start vs end) can never fit a single day's window.
+// for that weekday. A range spanning midnight (different UTC weekday for
+// start vs end) can never fit a single day's window. Shared by the API
+// (validating a real appointment) and the web app (shading calendar grid
+// slots as closed before the user tries to book one).
 export function isWithinWorkingHours(
   windows: WorkingHoursWindow[],
   startsAt: Date,

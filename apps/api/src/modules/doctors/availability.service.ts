@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { isWithinWorkingHours, WorkingHoursWindow } from '@clinic/shared';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../shared/redis/redis.module';
 import { AvailabilityRepository } from './availability.repository';
-import { isWithinWorkingHours, WorkingHoursWindow } from './domain/working-hours';
 
 const CACHE_TTL_SECONDS = 300;
 

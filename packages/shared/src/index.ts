@@ -13,3 +13,4 @@ export enum Role {
 }
 
 export * from './appointment-status-transitions';
+export * from './working-hours';

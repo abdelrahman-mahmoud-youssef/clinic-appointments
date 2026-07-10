@@ -1,4 +1,4 @@
-import { isWithinWorkingHours, WorkingHoursWindow } from './working-hours';
+import { isWithinWorkingHours, WorkingHoursWindow } from '@clinic/shared';
 
 // 2027-01-04 is a Monday (UTC weekday 1).
 const MONDAY_WINDOWS: WorkingHoursWindow[] = [{ weekday: 1, startTime: '09:00', endTime: '17:00' }];
