@@ -18,21 +18,20 @@ export interface Appointment {
 }
 
 export interface ListAppointmentsParams {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   doctorId?: string;
   status?: AppointmentStatus;
 }
 
-export function listAppointments(params: ListAppointmentsParams): Promise<Appointment[]> {
-  const query = new URLSearchParams({ from: params.from, to: params.to });
-  if (params.doctorId) {
-    query.set('doctorId', params.doctorId);
-  }
-  if (params.status) {
-    query.set('status', params.status);
-  }
-  return apiFetch(`/appointments?${query.toString()}`);
+export function listAppointments(params: ListAppointmentsParams = {}): Promise<Appointment[]> {
+  const query = new URLSearchParams();
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+  if (params.doctorId) query.set('doctorId', params.doctorId);
+  if (params.status) query.set('status', params.status);
+  const suffix = query.toString();
+  return apiFetch(`/appointments${suffix ? `?${suffix}` : ''}`);
 }
 
 export interface DayBucket {
