@@ -26,6 +26,18 @@ export class ClinicsService {
     return clinic.timezone;
   }
 
+  async updateSettings(
+    clinicId: string,
+    data: { dayStartHour: number; dayEndHour: number },
+  ): Promise<ClinicSettings> {
+    const clinic = await this.clinicsRepository.updateSettings(clinicId, data);
+    return {
+      dayStartHour: clinic.dayStartHour,
+      dayEndHour: clinic.dayEndHour,
+      timezone: clinic.timezone,
+    };
+  }
+
   private async getClinic(clinicId: string) {
     const clinic = await this.clinicsRepository.findById(clinicId);
     if (!clinic) {

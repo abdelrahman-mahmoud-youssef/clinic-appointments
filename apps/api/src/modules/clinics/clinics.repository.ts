@@ -9,4 +9,11 @@ export class ClinicsRepository {
   findById(clinicId: string): Promise<Clinic | null> {
     return this.prisma.clinic.findUnique({ where: { id: clinicId } });
   }
+
+  updateSettings(
+    clinicId: string,
+    data: { dayStartHour: number; dayEndHour: number },
+  ): Promise<Clinic> {
+    return this.prisma.clinic.update({ where: { id: clinicId }, data });
+  }
 }
