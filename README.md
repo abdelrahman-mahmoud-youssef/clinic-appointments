@@ -28,10 +28,12 @@ pnpm --filter @clinic/api exec prisma migrate deploy
 # 5. Seed two clinics with users, doctors, patients, and working hours
 pnpm --filter @clinic/api exec prisma db seed
 
-# 6. Run both apps (in separate terminals)
-pnpm --filter @clinic/api start:dev   # API on http://localhost:3000
-pnpm --filter @clinic/web dev         # Web on http://localhost:3001
+# 6. Run both apps together from the repo root
+pnpm dev   # API on http://localhost:3000, web on http://localhost:3001
 ```
+
+(Or run them separately in two terminals with `pnpm --filter @clinic/api dev`
+and `pnpm --filter @clinic/web dev`, if you want their logs apart.)
 
 Open http://localhost:3001 and log in with any of the seeded accounts
 (password for all of them is `Password123!`):
