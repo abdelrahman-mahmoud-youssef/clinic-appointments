@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { RoleGate } from '@/components/auth/RoleGate';
 import { CAN_BOOK } from '@/lib/auth/permissions';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
-import { StatusControl } from '@/components/appointments/StatusControl';
+import { AppointmentDetailsModal } from '@/components/appointments/AppointmentDetailsModal';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { Banner } from '@/components/ui/Banner';
@@ -277,7 +277,10 @@ export function AppointmentCalendar() {
         />
       )}
       {selectedAppointment && (
-        <StatusControl appointment={selectedAppointment} onClose={() => setSelectedAppointment(null)} />
+        <AppointmentDetailsModal
+          appointment={selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+        />
       )}
     </div>
   );
