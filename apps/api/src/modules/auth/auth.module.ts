@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthRepository } from './auth.repository';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginThrottleGuard } from './guards/login-throttle.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
@@ -27,6 +28,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     AuthService,
     AuthRepository,
     JwtStrategy,
+    LoginThrottleGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
