@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus } from '@clinic/shared';
 import { listDoctors } from '@/lib/api/doctors';
+import { Field, Select } from '@/components/ui/FormControls';
 import { STATUS_LABELS } from './statusColors';
 
 interface Props {
@@ -16,29 +17,22 @@ export function FiltersBar({ doctorId, onDoctorIdChange, status, onStatusChange 
   const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: listDoctors });
 
   return (
-    <div className="filters-bar">
-      <label>
-        Doctor
-        <select
-          value={doctorId ?? ''}
-          onChange={(event) => onDoctorIdChange(event.target.value || undefined)}
-        >
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+      <Field label="Doctor" className="mb-0 sm:w-48">
+        <Select value={doctorId ?? ''} onChange={(event) => onDoctorIdChange(event.target.value || undefined)}>
           <option value="">All doctors</option>
           {doctors.map((doctor) => (
             <option key={doctor.id} value={doctor.id}>
               {doctor.name}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label>
-        Status
-        <select
+      <Field label="Status" className="mb-0 sm:w-44">
+        <Select
           value={status ?? ''}
-          onChange={(event) =>
-            onStatusChange((event.target.value || undefined) as AppointmentStatus | undefined)
-          }
+          onChange={(event) => onStatusChange((event.target.value || undefined) as AppointmentStatus | undefined)}
         >
           <option value="">All statuses</option>
           {Object.values(AppointmentStatus).map((value) => (
@@ -46,8 +40,12 @@ export function FiltersBar({ doctorId, onDoctorIdChange, status, onStatusChange 
               {STATUS_LABELS[value]}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
+
+      {!doctorId && (
+        <p className="text-xs text-ink-faint sm:pb-2.5">Pick a doctor to see their closed hours on the calendar.</p>
+      )}
     </div>
   );
 }
