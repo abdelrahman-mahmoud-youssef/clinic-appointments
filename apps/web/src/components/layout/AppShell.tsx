@@ -7,10 +7,12 @@ import clsx from 'clsx';
 import { Role } from '@clinic/shared';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 
 const NAV: { href: string; label: string; roles?: Role[] }[] = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/calendar', label: 'Calendar' },
+  { href: '/appointments', label: 'Appointments' },
   { href: '/settings', label: 'Settings', roles: [Role.ADMIN] },
 ];
 
@@ -25,7 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="flex items-center gap-2">
-              <span className="slot-closed h-7 w-7 shrink-0 rounded-md border border-line-strong" />
+              <Logo size={28} />
               <span className="hidden font-display text-sm font-semibold text-ink sm:inline">
                 Clinic Appointments
               </span>

@@ -6,6 +6,7 @@ import { ApiError } from '@/lib/api/client';
 import { Field, Input } from '@/components/ui/FormControls';
 import { Button } from '@/components/ui/Button';
 import { Banner } from '@/components/ui/Banner';
+import { Logo } from '@/components/ui/Logo';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,7 +32,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
-          <span className="slot-closed flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong" />
+          <Logo size={36} />
           <span className="font-display text-lg font-semibold text-ink">Clinic Appointments</span>
         </div>
 
