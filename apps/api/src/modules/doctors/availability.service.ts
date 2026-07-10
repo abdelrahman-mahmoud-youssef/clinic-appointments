@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { isWithinWorkingHours, WorkingHoursWindow } from '@clinic/shared';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../shared/redis/redis.module';
+import { ClinicsService } from '../clinics/clinics.service';
 import { AvailabilityRepository } from './availability.repository';
 
 const CACHE_TTL_SECONDS = 300;
@@ -12,12 +13,16 @@ export class AvailabilityService {
 
   constructor(
     private readonly availabilityRepository: AvailabilityRepository,
+    private readonly clinicsService: ClinicsService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   async isDoctorAvailable(clinicId: string, doctorId: string, startsAt: Date, endsAt: Date): Promise<boolean> {
-    const windows = await this.getWorkingHours(clinicId, doctorId);
-    return isWithinWorkingHours(windows, startsAt, endsAt);
+    const [windows, timezone] = await Promise.all([
+      this.getWorkingHours(clinicId, doctorId),
+      this.clinicsService.getTimezone(clinicId),
+    ]);
+    return isWithinWorkingHours(windows, startsAt, endsAt, timezone);
   }
 
   async invalidateCache(clinicId: string, doctorId: string): Promise<void> {

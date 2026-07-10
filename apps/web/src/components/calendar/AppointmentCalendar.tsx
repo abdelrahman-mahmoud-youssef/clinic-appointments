@@ -5,12 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay } from 'date-fns';
+import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay, set } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
 import { getDoctorAvailability } from '@/lib/api/doctors';
+import { getClinicSettings } from '@/lib/api/clinic';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
 import { StatusControl } from '@/components/appointments/StatusControl';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
@@ -32,6 +33,14 @@ const localizer = dateFnsLocalizer({
 
 const SLOT_STEP_MINUTES = 30;
 const MOBILE_BREAKPOINT = 640;
+const DEFAULT_DAY_START_HOUR = 12;
+const DEFAULT_DAY_END_HOUR = 24;
+
+function hourToTime(hour: number): Date {
+  return hour >= 24
+    ? set(new Date(), { hours: 23, minutes: 59, seconds: 59, milliseconds: 999 })
+    : set(new Date(), { hours: hour, minutes: 0, seconds: 0, milliseconds: 0 });
+}
 
 interface DateRange {
   from: Date;
@@ -110,6 +119,16 @@ export function AppointmentCalendar() {
     enabled: !!doctorFilter,
   });
 
+  const { data: clinicSettings } = useQuery({
+    queryKey: ['clinic-settings'],
+    queryFn: getClinicSettings,
+  });
+
+  const dayStartHour = clinicSettings?.dayStartHour ?? DEFAULT_DAY_START_HOUR;
+  const dayEndHour = clinicSettings?.dayEndHour ?? DEFAULT_DAY_END_HOUR;
+  const minTime = useMemo(() => hourToTime(dayStartHour), [dayStartHour]);
+  const maxTime = useMemo(() => hourToTime(dayEndHour), [dayEndHour]);
+
   const events: CalendarEvent[] = useMemo(
     () =>
       appointments.map((appointment) => ({
@@ -124,13 +143,13 @@ export function AppointmentCalendar() {
 
   const isSlotClosed = useCallback(
     (start: Date) => {
-      if (!doctorFilter || !doctorWindows) {
+      if (!doctorFilter || !doctorWindows || !clinicSettings) {
         return false;
       }
       const end = new Date(start.getTime() + SLOT_STEP_MINUTES * 60_000);
-      return !isWithinWorkingHours(doctorWindows, start, end);
+      return !isWithinWorkingHours(doctorWindows, start, end, clinicSettings.timezone);
     },
-    [doctorFilter, doctorWindows],
+    [doctorFilter, doctorWindows, clinicSettings],
   );
 
   const handleRangeChange = useCallback((newRange: Date[] | { start: Date; end: Date }) => {
@@ -147,12 +166,17 @@ export function AppointmentCalendar() {
   }, []);
 
   const slotPropGetter = useCallback(
-    (date: Date) => (isSlotClosed(date) ? { className: 'slot-closed' } : {}),
+    (date: Date) =>
+      date.getTime() < Date.now() || isSlotClosed(date) ? { className: 'slot-closed' } : {},
     [isSlotClosed],
   );
 
   const handleSelectSlot = useCallback(
     (slotInfo: SlotInfo) => {
+      if (slotInfo.end.getTime() <= Date.now()) {
+        setClosedSlotNotice('That time is in the past. Pick a future slot to book an appointment.');
+        return;
+      }
       if (isSlotClosed(slotInfo.start)) {
         setClosedSlotNotice(
           "This doctor isn't available at that time. Pick an open slot, or clear the doctor filter to book any doctor.",
@@ -216,6 +240,8 @@ export function AppointmentCalendar() {
           views={CALENDAR_VIEWS}
           step={SLOT_STEP_MINUTES}
           timeslots={1}
+          min={minTime}
+          max={maxTime}
           onRangeChange={handleRangeChange}
           eventPropGetter={eventPropGetter}
           slotPropGetter={slotPropGetter}

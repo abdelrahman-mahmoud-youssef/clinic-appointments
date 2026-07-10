@@ -8,6 +8,10 @@ function createRedisMock() {
   return { get: jest.fn(), set: jest.fn(), del: jest.fn() };
 }
 
+function createClinicsServiceMock() {
+  return { getTimezone: jest.fn().mockResolvedValue('UTC') };
+}
+
 // 2027-01-04 is a Monday (UTC weekday 1).
 const MONDAY_ROWS = [{ weekday: 1, startTime: '09:00', endTime: '17:00' }];
 const insideWindow = { startsAt: new Date('2027-01-04T10:00:00Z'), endsAt: new Date('2027-01-04T10:30:00Z') };
@@ -16,12 +20,14 @@ const outsideWindow = { startsAt: new Date('2027-01-04T20:00:00Z'), endsAt: new 
 describe('AvailabilityService', () => {
   let repo: ReturnType<typeof createRepositoryMock>;
   let redis: ReturnType<typeof createRedisMock>;
+  let clinics: ReturnType<typeof createClinicsServiceMock>;
   let service: AvailabilityService;
 
   beforeEach(() => {
     repo = createRepositoryMock();
     redis = createRedisMock();
-    service = new AvailabilityService(repo as any, redis as any);
+    clinics = createClinicsServiceMock();
+    service = new AvailabilityService(repo as any, clinics as any, redis as any);
   });
 
   describe('with Redis reachable', () => {

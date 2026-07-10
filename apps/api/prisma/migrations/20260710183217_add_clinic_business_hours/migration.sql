@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Clinic" ADD COLUMN     "dayEndHour" INTEGER NOT NULL DEFAULT 24,
+ADD COLUMN     "dayStartHour" INTEGER NOT NULL DEFAULT 12;

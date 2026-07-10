@@ -24,9 +24,11 @@ enum AppointmentStatus {
 }
 
 model Clinic {
-  id        String   @id @default(uuid())
-  name      String
-  timezone  String
+  id           String @id @default(uuid())
+  name         String
+  timezone     String
+  dayStartHour Int    @default(12)
+  dayEndHour   Int    @default(24)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
