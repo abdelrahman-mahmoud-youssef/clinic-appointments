@@ -12,6 +12,9 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
 import { getDoctorAvailability } from '@/lib/api/doctors';
 import { getClinicSettings } from '@/lib/api/clinic';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { RoleGate } from '@/components/auth/RoleGate';
+import { CAN_BOOK } from '@/lib/auth/permissions';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
 import { StatusControl } from '@/components/appointments/StatusControl';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
@@ -88,6 +91,8 @@ export function AppointmentCalendar() {
   const [doctorFilter, setDoctorFilter] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | undefined>();
   const [closedSlotNotice, setClosedSlotNotice] = useState<string | null>(null);
+  const { role } = useAuth();
+  const canBook = role ? CAN_BOOK.includes(role) : false;
   const reschedule = useRescheduleAppointment();
 
   // Default to Day view on narrow screens. Adjusted after mount, not during
@@ -214,16 +219,18 @@ export function AppointmentCalendar() {
           status={statusFilter}
           onStatusChange={setStatusFilter}
         />
-        <Button
-          variant="primary"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            setPendingSlot(null);
-            setIsCreating(true);
-          }}
-        >
-          New appointment
-        </Button>
+        <RoleGate roles={CAN_BOOK}>
+          <Button
+            variant="primary"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setPendingSlot(null);
+              setIsCreating(true);
+            }}
+          >
+            New appointment
+          </Button>
+        </RoleGate>
       </div>
 
       {reschedule.isError && (
@@ -245,10 +252,11 @@ export function AppointmentCalendar() {
           onRangeChange={handleRangeChange}
           eventPropGetter={eventPropGetter}
           slotPropGetter={slotPropGetter}
-          selectable
+          selectable={canBook}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onEventDrop={handleEventDrop}
+          draggableAccessor={() => canBook}
           resizable={false}
           style={{ height: '100%' }}
           startAccessor="start"
