@@ -9,8 +9,10 @@ const ORDER: AppointmentStatus[] = [
   AppointmentStatus.NO_SHOW,
 ];
 
-export function StatusBreakdown({ counts }: { counts: Record<AppointmentStatus, number> }) {
-  const total = ORDER.reduce((sum, status) => sum + counts[status], 0);
+export function StatusBreakdown({ counts }: { counts?: Record<AppointmentStatus, number> }) {
+  const resolved = counts ?? ({} as Record<AppointmentStatus, number>);
+  const value = (status: AppointmentStatus) => resolved[status] ?? 0;
+  const total = ORDER.reduce((sum, status) => sum + value(status), 0);
 
   return (
     <div className="rounded-lg border border-line bg-surface p-4 sm:p-5">
@@ -23,11 +25,11 @@ export function StatusBreakdown({ counts }: { counts: Record<AppointmentStatus, 
       ) : (
         <>
           <div className="mt-3 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
-            {ORDER.filter((status) => counts[status] > 0).map((status) => (
+            {ORDER.filter((status) => value(status) > 0).map((status) => (
               <span
                 key={status}
-                style={{ backgroundColor: STATUS_COLORS[status], flexGrow: counts[status] }}
-                title={`${STATUS_LABELS[status]}: ${counts[status]}`}
+                style={{ backgroundColor: STATUS_COLORS[status], flexGrow: value(status) }}
+                title={`${STATUS_LABELS[status]}: ${value(status)}`}
               />
             ))}
           </div>
@@ -41,7 +43,7 @@ export function StatusBreakdown({ counts }: { counts: Record<AppointmentStatus, 
                   style={{ backgroundColor: STATUS_COLORS[status] }}
                 />
                 <dt className="text-sm text-ink-soft">{STATUS_LABELS[status]}</dt>
-                <dd className="ml-auto font-data text-sm tabular-nums text-ink">{counts[status]}</dd>
+                <dd className="ml-auto font-data text-sm tabular-nums text-ink">{value(status)}</dd>
               </div>
             ))}
           </dl>

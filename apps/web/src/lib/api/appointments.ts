@@ -35,6 +35,16 @@ export function listAppointments(params: ListAppointmentsParams): Promise<Appoin
   return apiFetch(`/appointments?${query.toString()}`);
 }
 
+export interface AppointmentSummary {
+  active: number;
+  counts: Record<AppointmentStatus, number>;
+}
+
+export function getAppointmentSummary(params: { from: string; to: string }): Promise<AppointmentSummary> {
+  const query = new URLSearchParams({ from: params.from, to: params.to });
+  return apiFetch(`/appointments/summary?${query.toString()}`);
+}
+
 export interface CreateAppointmentInput {
   patientId: string;
   doctorId: string;

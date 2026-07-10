@@ -7,7 +7,7 @@ import { AppointmentStatus, Role } from '@clinic/shared';
 import { startOfDay, endOfDay, addDays } from 'date-fns';
 import { useRequireAuth } from '@/lib/auth/useRequireAuth';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { listAppointments } from '@/lib/api/appointments';
+import { getAppointmentSummary } from '@/lib/api/appointments';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { StatusBreakdown } from '@/components/dashboard/StatusBreakdown';
@@ -18,20 +18,10 @@ import { Button } from '@/components/ui/Button';
 const WINDOW_DAYS = 7;
 const BRAND = '#0f6e63';
 
-function emptyCounts(): Record<AppointmentStatus, number> {
-  return {
-    [AppointmentStatus.SCHEDULED]: 0,
-    [AppointmentStatus.CONFIRMED]: 0,
-    [AppointmentStatus.COMPLETED]: 0,
-    [AppointmentStatus.CANCELLED]: 0,
-    [AppointmentStatus.NO_SHOW]: 0,
-  };
-}
-
 const HEADLINE: Record<Role, { title: string; subtitle: string }> = {
-  [Role.ADMIN]: { title: 'Clinic overview', subtitle: 'Everything happening across your clinic.' },
+  [Role.ADMIN]: { title: 'Clinic overview', subtitle: 'Everything across your clinic, next seven days.' },
   [Role.RECEPTIONIST]: { title: 'Front desk', subtitle: 'Book and manage the next seven days.' },
-  [Role.DOCTOR]: { title: 'Your clinic', subtitle: 'Update appointment statuses from the calendar.' },
+  [Role.DOCTOR]: { title: 'Your schedule', subtitle: 'Your appointments over the next seven days.' },
 };
 
 export default function DashboardPage() {
@@ -44,28 +34,12 @@ export default function DashboardPage() {
     return { from, to: endOfDay(addDays(from, WINDOW_DAYS - 1)) };
   }, []);
 
-  const { data: appointments = [], isLoading } = useQuery({
-    queryKey: ['appointments', 'dashboard', range.from.toISOString(), range.to.toISOString()],
-    queryFn: () => listAppointments({ from: range.from.toISOString(), to: range.to.toISOString() }),
+  const { data: summary, isLoading } = useQuery({
+    queryKey: ['appointments', 'summary', range.from.toISOString(), range.to.toISOString()],
+    queryFn: () =>
+      getAppointmentSummary({ from: range.from.toISOString(), to: range.to.toISOString() }),
     enabled: isReady,
   });
-
-  const stats = useMemo(() => {
-    const todayEnd = endOfDay(new Date());
-    const counts = emptyCounts();
-    let today = 0;
-    let active = 0;
-    for (const appointment of appointments) {
-      counts[appointment.status] += 1;
-      const isActive =
-        appointment.status !== AppointmentStatus.CANCELLED &&
-        appointment.status !== AppointmentStatus.NO_SHOW;
-      if (!isActive) continue;
-      active += 1;
-      if (new Date(appointment.startsAt) <= todayEnd) today += 1;
-    }
-    return { today, active, counts };
-  }, [appointments]);
 
   if (!isReady) {
     return (
@@ -74,6 +48,7 @@ export default function DashboardPage() {
   }
 
   const headline = role ? HEADLINE[role] : HEADLINE[Role.RECEPTIONIST];
+  const show = (value: number | undefined) => (isLoading || value === undefined ? '—' : value);
 
   return (
     <AppShell>
@@ -90,17 +65,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Today" value={isLoading ? '—' : stats.today} hint="Active appointments" accent={BRAND} />
-        <StatCard label="Next 7 days" value={isLoading ? '—' : stats.active} hint="Active appointments" />
+        <StatCard label="Active" value={show(summary?.active)} hint="Not cancelled or no-show" accent={BRAND} />
         <StatCard
           label="Awaiting confirmation"
-          value={isLoading ? '—' : stats.counts[AppointmentStatus.SCHEDULED]}
+          value={show(summary?.counts[AppointmentStatus.SCHEDULED])}
         />
-        <StatCard label="Confirmed" value={isLoading ? '—' : stats.counts[AppointmentStatus.CONFIRMED]} />
+        <StatCard label="Confirmed" value={show(summary?.counts[AppointmentStatus.CONFIRMED])} />
+        <StatCard label="Completed" value={show(summary?.counts[AppointmentStatus.COMPLETED])} />
       </div>
 
       <div className="mt-4">
-        <StatusBreakdown counts={stats.counts} />
+        <StatusBreakdown counts={summary?.counts} />
       </div>
     </AppShell>
   );

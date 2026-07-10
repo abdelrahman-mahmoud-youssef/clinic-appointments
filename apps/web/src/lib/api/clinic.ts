@@ -9,3 +9,10 @@ export interface ClinicSettings {
 export function getClinicSettings(): Promise<ClinicSettings> {
   return apiFetch('/clinics/me');
 }
+
+export function updateClinicSettings(input: {
+  dayStartHour: number;
+  dayEndHour: number;
+}): Promise<ClinicSettings> {
+  return apiFetch('/clinics/me', { method: 'PATCH', body: JSON.stringify(input) });
+}

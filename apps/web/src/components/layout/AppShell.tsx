@@ -4,17 +4,20 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
+import { Role } from '@clinic/shared';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
 
-const NAV = [
+const NAV: { href: string; label: string; roles?: Role[] }[] = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/calendar', label: 'Calendar' },
+  { href: '/settings', label: 'Settings', roles: [Role.ADMIN] },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { role, logout } = useAuth();
+  const nav = NAV.filter((item) => !item.roles || (role && item.roles.includes(role)));
 
   return (
     <div className="min-h-screen">
@@ -28,7 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </div>
             <nav className="flex items-center gap-1">
-              {NAV.map((item) => (
+              {nav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
