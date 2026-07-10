@@ -34,7 +34,7 @@ export function StatusBreakdown({ counts }: { counts?: Record<AppointmentStatus,
             ))}
           </div>
 
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+          <dl className="mt-4 flex flex-col gap-2">
             {ORDER.map((status) => (
               <div key={status} className="flex items-center gap-2">
                 <span
@@ -42,7 +42,7 @@ export function StatusBreakdown({ counts }: { counts?: Record<AppointmentStatus,
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: STATUS_COLORS[status] }}
                 />
-                <dt className="text-sm text-ink-soft">{STATUS_LABELS[status]}</dt>
+                <dt className="whitespace-nowrap text-sm text-ink-soft">{STATUS_LABELS[status]}</dt>
                 <dd className="ml-auto font-data text-sm tabular-nums text-ink">{value(status)}</dd>
               </div>
             ))}
