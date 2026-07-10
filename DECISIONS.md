@@ -297,12 +297,9 @@ COMPLETED, CANCELLED, NO_SHOW -> terminal
 - Same reasoning as the API: `create-next-app` fights a pnpm workspace
   (its own git init, lockfile, ESLint config) more than it helps, and
   most of its output would be deleted anyway.
-- No Tailwind/component library — plain `globals.css` with a handful of
-  reusable classes (`.modal`, `.form-error`, `.status-badge`,
-  `.filters-bar`). The API is the graded core; the frontend's job is to
-  make the features demonstrable, not to be elaborate, so a styling
-  framework's setup cost (config files, a new dependency, a new set of
-  conventions to follow correctly) wasn't worth paying for four pages.
+- Originally shipped with plain `globals.css` and no styling framework;
+  superseded by the Tailwind redesign below once the UI needed to look
+  and behave like a real product rather than prove the API works.
 - `react-big-calendar` + `date-fns` (its documented localizer dependency)
   for the calendar itself — the one place off-the-shelf really earns its
   keep, since day/week/month views and drag-and-drop are exactly what it
@@ -430,3 +427,47 @@ it would add real surface area for a requirement nobody asked for here.
   graceful-degradation handling), so BullMQ would be additive — a new
   module, not a restructure — the day an actual job needs it. Until then,
   it's out of scope by design, not an unfinished corner of this one.
+
+## Frontend redesign: Tailwind v4, a small component library, closed-slot shading
+
+- **Tailwind v4** replaced the hand-written `globals.css`. The CSS-first
+  `@theme` block (`apps/web/src/app/globals.css`) is the single source of
+  design tokens — palette, type scale, radii — instead of scattered
+  hex values across component files. Chosen over a component library
+  (MUI/Chakra/shadcn) because the brief asked for a distinctive look, and
+  a component library brings its own visual identity that fights against
+  that; Tailwind is styling primitives, not a design system, so the
+  identity stays this project's own.
+- **Hand-rolled `Modal` instead of a headless-UI dependency.** Focus trap,
+  Escape-to-close, focus restoration, and `role="dialog"`/`aria-modal`
+  are ~60 lines and every appointment-editing flow already goes through
+  one modal shape (`AppointmentFormModal`, `StatusControl`). Pulling in
+  Radix/Headless UI for one component risks a React 19 peer-dependency
+  mismatch for a problem this small.
+- **Closed slots are shown before the click, not discovered after
+  submitting.** `GET /doctors/:id/availability` (new, clinic-scoped, thin
+  passthrough to `AvailabilityService.getWorkingHours`, same layering as
+  every other read endpoint) backs a `slotPropGetter` that shades
+  out-of-hours calendar cells once a doctor filter is active, and
+  `handleSelectSlot` short-circuits with an inline notice instead of
+  opening the create form for a slot that would just come back 422. This
+  reuses the exact same containment logic the backend enforces —
+  see the next entry — so the shading can never show a slot as open that
+  the backend would then reject, or vice versa.
+- **`isWithinWorkingHours` moved from `apps/api/.../domain/working-hours.ts`
+  into `packages/shared`**, mirroring the existing status-transition-table
+  pattern (see "The status state machine" above). Same reasoning: the
+  frontend needs the identical weekday/time-containment predicate the
+  backend uses to reject a booking, and two independent implementations
+  of "is this appointment inside a working-hours window" would eventually
+  drift. Closed-slot shading is inherently per-doctor (no single doctor
+  filter selected means there's no one set of hours to shade against), so
+  it only activates once a doctor filter is chosen.
+- **No dedicated mobile layout, breakpoint-driven responsiveness
+  instead.** The calendar defaults to `Views.WEEK` and switches to
+  `Views.DAY` in a post-mount effect below a 640px width (checked after
+  mount, not during SSR, so the server-rendered and first-client-render
+  markup still match and there's no hydration warning); the custom
+  toolbar swaps a segmented Day/Week/Month control for a `<select>` at
+  the same breakpoint. One `AppointmentCalendar` component serves both
+  form factors rather than maintaining a parallel mobile component tree.
