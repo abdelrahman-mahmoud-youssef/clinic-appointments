@@ -1,6 +1,7 @@
 import { apiFetch } from './client';
 
 export interface ClinicSettings {
+  name: string;
   dayStartHour: number;
   dayEndHour: number;
   timezone: string;
