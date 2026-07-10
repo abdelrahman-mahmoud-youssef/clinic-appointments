@@ -9,4 +9,8 @@ export class DoctorsRepository {
   findAllByClinic(clinicId: string): Promise<Doctor[]> {
     return this.prisma.doctor.findMany({ where: { clinicId }, orderBy: { name: 'asc' } });
   }
+
+  create(clinicId: string, name: string): Promise<Doctor> {
+    return this.prisma.doctor.create({ data: { clinicId, name } });
+  }
 }
