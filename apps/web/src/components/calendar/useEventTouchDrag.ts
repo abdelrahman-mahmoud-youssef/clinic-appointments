@@ -30,6 +30,7 @@ interface ActiveDrag {
   pointerId: number;
   startX: number;
   startY: number;
+  grabOffsetY: number;
   dragging: boolean;
   node: HTMLElement | null;
   target: Target | null;
@@ -66,7 +67,8 @@ export function useEventTouchDrag(configRef: MutableRefObject<DragConfig>) {
       const rect = content.getBoundingClientRect();
       const pxPerMinute = content.scrollHeight / rangeMinutes;
       const durationMinutes = (drag.event.end.getTime() - drag.event.start.getTime()) / 60000;
-      const offsetY = clientY - rect.top + content.scrollTop;
+      const topY = clientY - drag.grabOffsetY;
+      const offsetY = topY - rect.top + content.scrollTop;
 
       let minute =
         Math.round((config.dayStartHour * 60 + offsetY / pxPerMinute) / STEP_MINUTES) * STEP_MINUTES;
@@ -100,11 +102,13 @@ export function useEventTouchDrag(configRef: MutableRefObject<DragConfig>) {
       if (dragRef.current) return;
 
       const node = (pointerEvent.currentTarget as HTMLElement).closest<HTMLElement>('.rbc-event');
+      const grabOffsetY = node ? pointerEvent.clientY - node.getBoundingClientRect().top : 0;
       const active: ActiveDrag = {
         event,
         pointerId: pointerEvent.pointerId,
         startX: pointerEvent.clientX,
         startY: pointerEvent.clientY,
+        grabOffsetY,
         dragging: false,
         node,
         target: null,
