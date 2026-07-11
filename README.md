@@ -25,7 +25,7 @@ cp apps/api/.env.example apps/api/.env
 # 4. Apply migrations (creates tables + the double-booking exclusion constraint)
 pnpm --filter @clinic/api exec prisma migrate deploy
 
-# 5. Seed two clinics with users, doctors, patients, and working hours
+# 5. Seed two clinics with users, doctors, patients, working hours, and appointments
 pnpm --filter @clinic/api exec prisma db seed
 
 # 6. Run both apps together from the repo root
@@ -49,9 +49,36 @@ Open http://localhost:3001 and log in with any of the seeded accounts
 
 Two clinics exist specifically so you can confirm cross-tenant isolation:
 data created in one is invisible to and unreachable from the other. Each
-clinic seeds two doctors — one with a Mon–Fri split shift (09:00–12:00,
-13:00–17:00) and one with a single Mon–Fri block (09:00–17:00) — so the
-availability check has real working hours to enforce.
+clinic seeds two doctors with single Mon–Fri shifts within the clinic's
+operating hours (Sunrise 08:00–18:00, Downtown 09:00–17:00), a handful of
+patients, and a few upcoming appointments — including two at the same time
+for different doctors, so the calendar's per-doctor day columns are visible
+immediately.
+
+## Features
+
+Role-aware UI (ADMIN / RECEPTIONIST / DOCTOR), gated both in the API
+(`RolesGuard`) and the web app (`RoleGate`):
+
+- **Dashboard** — role-scoped KPIs, a weekly-volume chart, a status
+  breakdown, and an upcoming list, all aggregated by the backend.
+- **Calendar** — day/week/month views with drag-to-reschedule; in the day
+  view with no doctor filter it renders **one column per doctor** so
+  same-time appointments don't collide visually. Out-of-hours and past
+  slots are shaded; open slots cue a "+" on hover.
+- **Appointments list** — a filterable table (doctor / status / date range,
+  all applied server-side, synced to the URL) with a per-appointment detail
+  page at `/appointments/:id`.
+- **Create / edit / reschedule / status** — full appointment lifecycle,
+  with the status workflow enforced by the state machine.
+- **Doctors** (admin) — roster with each doctor's weekly hours, edited
+  through a single-shift-per-day editor bounded to the clinic's window.
+- **Staff** (admin) — create receptionist/doctor/admin accounts; creating a
+  doctor account also creates the doctor record.
+- **Settings** (admin) — edit the clinic's operating hours.
+
+A DOCTOR is scoped to their own appointments server-side; a RECEPTIONIST
+can book and reschedule; an ADMIN can do everything within their clinic.
 
 ## Running the tests
 
@@ -60,9 +87,12 @@ availability check has real working hours to enforce.
 # No database required.
 pnpm --filter @clinic/api test
 
-# Integration tests: real Postgres, including the concurrency race.
-# Requires the postgres container from `docker compose up -d` to be running.
+# Integration tests: real Postgres, including the concurrency race and the
+# appointment edit path. Requires the postgres container to be running.
 pnpm --filter @clinic/api run test:integration
+
+# End-to-end tests: the API booted over HTTP against real Postgres + Redis.
+pnpm --filter @clinic/api run test:e2e
 ```
 
 The integration suite creates its own throwaway clinics/doctors/patients per
@@ -72,7 +102,7 @@ never touches the seeded demo data.
 ## Architecture
 
 Standard NestJS layering, applied consistently across every feature module
-(`appointments`, `auth`, `doctors`, `patients`):
+(`appointments`, `auth`, `clinics`, `doctors`, `patients`, `users`):
 
 ```
 controller  → thin: extract request data, delegate, return. No logic.
@@ -83,10 +113,11 @@ domain/     → pure functions (no Nest, no Prisma, no I/O). Unit-tested directl
 
 The two places this matters most:
 
-- **`appointments/domain/overlap.ts`** — the collision predicate
-  (`newStart < existingEnd && newEnd > existingStart`) as a pure function,
-  reused conceptually by both the app-level pre-check and the database
-  constraint below.
+- **`appointments/appointments.repository.ts`** (`findOverlapping`) — the
+  collision predicate (`newStart < existingEnd && newEnd > existingStart`)
+  as a clinic/doctor-scoped SQL query. It is the friendly-error pre-check
+  that mirrors the database constraint below; the constraint is the actual
+  guarantee.
 - **`appointments/domain/appointment-status.machine.ts`** — the status
   state machine. The transition table itself lives in `packages/shared`
   (see [The status state machine](./DECISIONS.md#the-status-state-machine))
@@ -106,10 +137,11 @@ controller boundary. Domain exceptions (`OverlappingAppointmentError`,
 `CrossTenantAccessError`) carry no knowledge of HTTP — the filter owns that
 mapping.
 
-`packages/shared` holds the `AppointmentStatus`/`Role` enums and the status
-transition table, consumed by both `apps/api` and `apps/web` so tenancy
-rules, role names, and legal status transitions have exactly one source of
-truth instead of two hand-maintained copies.
+`packages/shared` holds the `AppointmentStatus`/`Role` enums, the status
+transition table, the `INACTIVE_STATUSES` set, and the `isWithinWorkingHours`
+predicate — consumed by both `apps/api` and `apps/web` so tenancy rules,
+role names, legal status transitions, and the working-hours check have
+exactly one source of truth instead of two hand-maintained copies.
 
 Full reasoning for every non-obvious choice — including the ones this
 README only summarizes — is in [`DECISIONS.md`](./DECISIONS.md).
@@ -139,9 +171,9 @@ conflict" and both insert — the check is only ever a snapshot, never a
 guarantee. The exclusion constraint makes Postgres itself the arbiter at
 insert time: under real concurrency, exactly one of two conflicting inserts
 commits and the other errors, regardless of timing. The app-level overlap
-check in `domain/overlap.ts` still runs first — it exists purely to turn
-the common, non-racing case into a friendly `409`, not to provide the
-actual guarantee.
+check (`findOverlapping` in the appointments repository) still runs first —
+it exists purely to turn the common, non-racing case into a friendly `409`,
+not to provide the actual guarantee.
 
 **The two-part failure mode this project's tests specifically caught:**
 under genuine concurrent inserts (proven with a `Promise.allSettled` race in
