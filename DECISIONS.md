@@ -19,6 +19,12 @@ Why each non-obvious choice was made. Newest at the bottom.
   `init` migration (which creates the plain tables/enums/FKs). Prisma migration
   history tolerates hand-written SQL as long as it lives in its own migration
   folder — `migrate dev`/`deploy` just replay files in timestamp order.
+- **Deploy consideration:** the migration runs `CREATE EXTENSION IF NOT
+  EXISTS btree_gist`, which requires a privileged (superuser or
+  `rds_superuser`-equivalent) role on some managed Postgres providers. The
+  docker-compose Postgres runs as superuser so it's a non-issue locally; a
+  managed deploy may need the extension enabled by the provider or a
+  privileged role for the migration step.
 - **Why this is the source of truth, not an app-level check:** a check-then-
   insert in application code has a race window between the read and the write;
   two concurrent requests can both pass the check and both insert. The
@@ -149,15 +155,19 @@ COMPLETED, CANCELLED, NO_SHOW -> terminal
   dependency, works identically everywhere, `ConfigService.getOrThrow()`
   fails fast at boot instead of booting with an undefined secret.
 
-## Appointments: doctor availability is a stub behind a clean seam
+## Appointments: doctor availability behind a clean seam (now implemented)
 
-- `DoctorsModule`/`AvailabilityService.isDoctorAvailable()` always returns
-  `true` — no working-hours, time-off, or existing-booking logic yet. It's a
-  real injected class, not a TODO comment or an inline `true`, so
-  `AppointmentsService` already calls it in the right place (before the
-  overlap check, on both create and reschedule) and the real
-  implementation drops in behind the same method signature later with zero
-  changes to `AppointmentsService` or its call sites.
+- Originally shipped as a stub: `AvailabilityService.isDoctorAvailable()`
+  returned `true` unconditionally, but as a real injected class (not a TODO
+  or inline `true`) so `AppointmentsService` already called it in the right
+  place — before the overlap check, on both create and reschedule.
+- The seam paid off: the real implementation dropped in behind the same
+  method signature with zero changes to `AppointmentsService` or its call
+  sites. `isDoctorAvailable()` now loads the doctor's weekly working-hours
+  windows (Redis-cached, Postgres-backed) and delegates to the pure
+  `isWithinWorkingHours` predicate in `@clinic/shared`. Time-off /
+  vacation overrides are still out of scope; recurring weekly hours are
+  the availability model this project has.
 
 ## Appointments: cross-clinic doctorId/patientId rejected on create
 
@@ -248,21 +258,30 @@ COMPLETED, CANCELLED, NO_SHOW -> terminal
   too; merging contiguous rows into a wider window wasn't built since
   nothing asked for it and it adds real interval-merging logic for an
   edge case unlikely to occur in seeded or realistic data.
+- The write path (`setWorkingHours` + `SetAvailabilityDto`) accepts multiple
+  non-overlapping windows per weekday, so split shifts are actually
+  creatable, not merely representable — it validates that a day's windows
+  don't overlap each other (half-open, so back-to-back windows are fine)
+  and leaves genuine gaps (a lunch break) as unavailable time. The seed's
+  Dr. Mona Saleh carries a 15:00–16:00 gap so a real split shift exists.
 
-## Doctor availability: weekday/time compared in UTC, not clinic-local time
+## Doctor availability: weekday/time compared in the clinic's timezone
 
-- `startsAt`/`endsAt` are stored as UTC timestamps; `isWithinWorkingHours`
-  compares their UTC weekday and UTC clock time directly against the
-  doctor's `HH:mm` rows, with no conversion through `Clinic.timezone`.
-  This is a real simplification, not silently swept under the rug: a
-  clinic whose local timezone isn't UTC would have its working-hours
-  windows effectively shifted by the UTC offset. Proper IANA-timezone-
-  aware conversion (`Intl.DateTimeFormat` with `clinic.timezone`) is a
-  legitimately bigger feature — value keyed by a compound
-  (weekday, minute-of-day) needs the clinic's civil time, not the
-  timestamp's UTC clock time, and DST transitions add real edge cases.
-  Not built because it wasn't asked for here; flagging it as a known gap
-  rather than a silent decision.
+- `startsAt`/`endsAt` are stored as UTC timestamps, but `isWithinWorkingHours`
+  does not compare them in UTC. It converts each timestamp to the clinic's
+  civil time via `Intl.DateTimeFormat` with `Clinic.timezone` (`zonedParts`
+  in `packages/shared/src/working-hours.ts`), extracting the *clinic-local*
+  weekday and minute-of-day, and compares those against the doctor's `HH:mm`
+  rows. `AvailabilityService.isDoctorAvailable` fetches the clinic timezone
+  and passes it through. This is the correct model: working hours are civil
+  time ("Dr. Mona works Mondays 12:00–20:00 clinic time"), so the comparison
+  has to be in the clinic's wall clock, not the timestamp's UTC clock.
+- An earlier version *did* compare in UTC and was flagged here as a known
+  gap; that gap is closed. `Intl.DateTimeFormat` handles the IANA offset
+  (including DST) without a date library. One residual edge: an appointment
+  that starts and ends on different clinic-local weekdays (crossing local
+  midnight) is treated as out-of-hours, which is correct for a same-day
+  clinic booking model.
 
 ## Doctor availability: Redis client is ioredis
 
@@ -313,12 +332,13 @@ COMPLETED, CANCELLED, NO_SHOW -> terminal
   populate their dropdowns from, and no such endpoint existed. Without
   them the form would need raw UUID text inputs, which would defeat the
   actual point of building a frontend ("make the features demonstrable").
-- `app.enableCors()` (default: reflects any origin) was added to
-  `main.ts` — without it, every fetch from the web app (a different
-  origin/port: 3001 vs the API's 3000) is blocked by the browser before
-  it reaches a single controller. Fine for a take-home; a real
-  deployment would restrict this to the actual frontend origin(s)
-  instead of allowing any.
+- `app.enableCors()` was added to `main.ts` — without it, every fetch from
+  the web app (a different origin/port: 3001 vs the API's 3000) is blocked
+  by the browser before it reaches a single controller. It reads a
+  `CORS_ORIGINS` env var (comma-separated allowlist) and only falls back to
+  reflecting any origin when that var is unset — so a real deployment
+  restricts to the actual frontend origin(s) by setting `CORS_ORIGINS`,
+  while local dev stays zero-config.
 
 ## Frontend: JWT stored in localStorage, not an httpOnly cookie
 
@@ -331,28 +351,36 @@ COMPLETED, CANCELLED, NO_SHOW -> terminal
   endpoint already returns a bearer token in the response body (not a
   cookie), matching how it was built in step 5.
 
-## Frontend: no session-expiry handling
+## Frontend: 401 handling forces a re-login
 
 - The API issues a 12h JWT with no refresh (see the earlier "Auth: no
-  refresh tokens" decision). The frontend doesn't do anything special
-  when a request fails with 401 partway through a session — `apiFetch`
-  throws an `ApiError` like any other failure, which surfaces as a
-  generic error message rather than an automatic redirect to `/login`.
-  A production app would want a response interceptor that catches 401
-  specifically and forces a re-login. Not built here; noting the gap
-  rather than leaving it to be discovered.
+  refresh tokens" decision). When any request fails with 401 partway
+  through a session, `apiFetch` (the single fetch wrapper every API call
+  goes through) clears the stored token and redirects to `/login` — one
+  choke point, so an expired or revoked token bounces the user to
+  re-authenticate instead of surfacing a generic error. It still also
+  throws an `ApiError` so the calling component's error handling runs;
+  the redirect is an additional side effect, not a replacement. There's
+  no silent refresh (there are no refresh tokens to refresh with) — a
+  full re-login is the deliberate recovery path.
 
-## Frontend: no clinic-timezone-aware display
+## Frontend: clinic-timezone-aware availability, browser-timezone display
 
-- Same simplification as the backend's availability check (see the
-  earlier "Doctor availability: weekday/time compared in UTC" decision):
-  `react-big-calendar` is handed plain JS `Date` objects built from the
-  API's UTC timestamps, so events render in whatever timezone the
-  *browser* is in, not the clinic's own `timezone` field. For a clinic
-  staff member sitting in the clinic's own timezone this happens to look
-  right by coincidence; it would not for a remote user in a different
-  timezone. Proper support needs the same `Intl.DateTimeFormat`-based
-  conversion flagged as out of scope on the backend.
+- Two different concerns, two different answers here:
+  - **Closed-slot shading is clinic-timezone-aware.** The calendar passes
+    `clinicSettings.timezone` into the same `isWithinWorkingHours` predicate
+    the backend enforces with, so the greyed/hatched out-of-hours slots are
+    computed in the clinic's civil time — the UI and API can't disagree
+    about what "open" means.
+  - **Event rendering is still browser-local.** `react-big-calendar` is
+    handed plain JS `Date` objects built from the API's UTC timestamps, so
+    an appointment's position and time label render in whatever timezone the
+    *browser* is in, not the clinic's `timezone` field. For staff sitting in
+    the clinic's own timezone this is correct; a remote user in a different
+    timezone would see clinic events shifted to their own wall clock. Making
+    the calendar render in the clinic timezone regardless of browser locale
+    is the remaining piece — deliberately out of scope, but no longer the
+    same gap as the backend, which is now fully clinic-timezone-aware.
 
 ## Frontend: no automated test suite
 
