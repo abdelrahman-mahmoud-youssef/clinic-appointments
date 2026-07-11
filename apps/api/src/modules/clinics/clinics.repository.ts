@@ -12,7 +12,7 @@ export class ClinicsRepository {
 
   updateSettings(
     clinicId: string,
-    data: { dayStartHour: number; dayEndHour: number },
+    data: { name: string; dayStartHour: number; dayEndHour: number },
   ): Promise<Clinic> {
     return this.prisma.clinic.update({ where: { id: clinicId }, data });
   }

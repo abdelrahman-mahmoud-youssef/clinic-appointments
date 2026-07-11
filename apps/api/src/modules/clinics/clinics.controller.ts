@@ -18,6 +18,7 @@ export class ClinicsController {
   @Patch('me')
   updateSettings(@Body() dto: UpdateClinicSettingsDto, @ClinicId() clinicId: string) {
     return this.clinicsService.updateSettings(clinicId, {
+      name: dto.name,
       dayStartHour: dto.dayStartHour,
       dayEndHour: dto.dayEndHour,
     });

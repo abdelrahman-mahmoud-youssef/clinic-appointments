@@ -12,6 +12,7 @@ export function getClinicSettings(): Promise<ClinicSettings> {
 }
 
 export function updateClinicSettings(input: {
+  name: string;
   dayStartHour: number;
   dayEndHour: number;
 }): Promise<ClinicSettings> {

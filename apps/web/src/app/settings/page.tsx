@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { getClinicSettings, updateClinicSettings } from '@/lib/api/clinic';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { AppShell } from '@/components/layout/AppShell';
-import { Field, Select } from '@/components/ui/FormControls';
+import { Field, Input, Select } from '@/components/ui/FormControls';
 import { Button } from '@/components/ui/Button';
 import { Banner } from '@/components/ui/Banner';
 
@@ -47,6 +47,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  const [name, setName] = useState('');
   const [startHour, setStartHour] = useState(12);
   const [endHour, setEndHour] = useState(24);
   const [saved, setSaved] = useState(false);
@@ -65,6 +66,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings) {
+      setName(settings.name);
       setStartHour(settings.dayStartHour);
       setEndHour(settings.dayEndHour);
     }
@@ -85,12 +87,13 @@ export default function SettingsPage() {
   }
 
   const invalidRange = endHour <= startHour;
+  const invalidName = name.trim().length < 2;
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (invalidRange) return;
+    if (invalidRange || invalidName) return;
     setSaved(false);
-    mutation.mutate({ dayStartHour: startHour, dayEndHour: endHour });
+    mutation.mutate({ name: name.trim(), dayStartHour: startHour, dayEndHour: endHour });
   }
 
   return (
@@ -106,6 +109,20 @@ export default function SettingsPage() {
         onSubmit={handleSubmit}
         className="max-w-xl rounded-lg border border-line bg-surface p-5 sm:p-6"
       >
+        <Field label="Clinic name">
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={120}
+            placeholder="Clinic name"
+          />
+        </Field>
+        {invalidName && (
+          <p className="mt-2 text-sm text-danger">Clinic name must be at least 2 characters.</p>
+        )}
+
+        <hr className="my-5 border-line" />
+
         <h2 className="font-display text-sm font-semibold text-ink">Calendar hours</h2>
         <p className="mt-1 text-sm text-ink-soft">
           The window the calendar shows on every day. Times are in the clinic timezone.
@@ -151,7 +168,11 @@ export default function SettingsPage() {
         {saved && !mutation.isPending && <p className="mt-4 text-sm text-brand">Saved.</p>}
 
         <div className="mt-5">
-          <Button type="submit" variant="primary" disabled={mutation.isPending || invalidRange}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={mutation.isPending || invalidRange || invalidName}
+          >
             {mutation.isPending ? 'Saving…' : 'Save changes'}
           </Button>
         </div>

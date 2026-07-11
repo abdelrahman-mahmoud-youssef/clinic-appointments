@@ -30,7 +30,7 @@ export class ClinicsService {
 
   async updateSettings(
     clinicId: string,
-    data: { dayStartHour: number; dayEndHour: number },
+    data: { name: string; dayStartHour: number; dayEndHour: number },
   ): Promise<ClinicSettings> {
     const clinic = await this.clinicsRepository.updateSettings(clinicId, data);
     return {

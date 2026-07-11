@@ -4,8 +4,10 @@ import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
+import { useQuery } from '@tanstack/react-query';
 import { Role } from '@clinic/shared';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { getClinicSettings } from '@/lib/api/clinic';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 
@@ -22,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { role, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: clinic } = useQuery({ queryKey: ['clinic-settings'], queryFn: getClinicSettings });
 
   useEffect(() => {
     setMenuOpen(false);
@@ -43,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link href="/dashboard" className="flex items-center gap-2">
               <Logo size={28} />
               <span className="hidden font-display text-sm font-semibold text-ink sm:inline">
-                Clinic Appointments
+                {clinic?.name ?? 'Clinic Appointments'}
               </span>
             </Link>
             <nav className="hidden items-center gap-1 md:flex">

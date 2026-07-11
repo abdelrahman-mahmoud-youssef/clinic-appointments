@@ -25,7 +25,7 @@ export class UsersService {
 
     let doctorId: string | undefined;
     if (dto.role === Role.DOCTOR && dto.doctorName) {
-      const doctor = await this.doctorsService.create(clinicId, dto.doctorName.trim());
+      const doctor = await this.doctorsService.create(clinicId, dto.doctorName);
       doctorId = doctor.id;
     }
 

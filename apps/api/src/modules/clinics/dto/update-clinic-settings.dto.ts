@@ -1,7 +1,11 @@
+import { Transform } from 'class-transformer';
 import {
   IsInt,
+  IsString,
   Max,
+  MaxLength,
   Min,
+  MinLength,
   registerDecorator,
   ValidationArguments,
   ValidationOptions,
@@ -29,6 +33,12 @@ function IsGreaterThan(property: string, validationOptions?: ValidationOptions) 
 }
 
 export class UpdateClinicSettingsDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name!: string;
+
   @IsInt()
   @Min(0)
   @Max(23)

@@ -1,4 +1,5 @@
 import { Role } from '@clinic/shared';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsEnum, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateUserDto {
@@ -12,6 +13,7 @@ export class CreateUserDto {
   role!: Role;
 
   @ValidateIf((dto) => dto.role === Role.DOCTOR)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(2)
   @MaxLength(120)
