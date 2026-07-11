@@ -1,5 +1,6 @@
 import { AppointmentStatus, Role } from '@clinic/shared';
 import {
+  AppointmentInThePastError,
   CrossTenantAccessError,
   InvalidStatusTransitionError,
   OverlappingAppointmentError,
@@ -151,6 +152,44 @@ describe('AppointmentsService', () => {
         expect.objectContaining({ excludeAppointmentId: 'appt-1' }),
       );
       expect(result.reason).toBe('Updated');
+    });
+
+    it('allows editing a past appointment whose start time is unchanged', async () => {
+      const past = buildAppointment({
+        startsAt: new Date('2020-01-06T09:00:00Z'),
+        endsAt: new Date('2020-01-06T09:30:00Z'),
+      });
+      repo.findById.mockResolvedValue(past);
+      repo.findOverlapping.mockResolvedValue([]);
+      repo.update.mockResolvedValue({ ...past, reason: 'Corrected note' });
+
+      const result = await service.update({
+        ...editInput,
+        startsAt: new Date('2020-01-06T09:00:00Z'),
+        endsAt: new Date('2020-01-06T09:30:00Z'),
+        reason: 'Corrected note',
+      });
+
+      expect(result.reason).toBe('Corrected note');
+    });
+
+    it('rejects moving an upcoming appointment into the past', async () => {
+      repo.findById.mockResolvedValue(
+        buildAppointment({
+          startsAt: new Date('2035-01-06T09:00:00Z'),
+          endsAt: new Date('2035-01-06T09:30:00Z'),
+        }),
+      );
+
+      await expect(
+        service.update({
+          ...editInput,
+          startsAt: new Date('2020-01-06T09:00:00Z'),
+          endsAt: new Date('2020-01-06T09:30:00Z'),
+        }),
+      ).rejects.toThrow(AppointmentInThePastError);
+
+      expect(repo.update).not.toHaveBeenCalled();
     });
 
     it('persists doctor and patient as scalar ids, not relation writes', async () => {

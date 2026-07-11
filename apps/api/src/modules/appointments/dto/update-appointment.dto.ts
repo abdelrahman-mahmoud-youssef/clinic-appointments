@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsDate, IsOptional, IsString, IsUUID } from 'class-validator';
-import { IsAfter, IsNotInPast } from './validators/time-range.validators';
+import { IsAfter } from './validators/time-range.validators';
 
 export class UpdateAppointmentDto {
   @IsUUID()
@@ -11,7 +11,6 @@ export class UpdateAppointmentDto {
 
   @IsDate()
   @Type(() => Date)
-  @IsNotInPast()
   startsAt!: Date;
 
   @IsDate()

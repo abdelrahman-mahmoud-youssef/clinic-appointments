@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppointmentStatus, INACTIVE_STATUSES, Role } from '@clinic/shared';
 import { Appointment } from '@prisma/client';
 import {
+  AppointmentInThePastError,
   CrossTenantAccessError,
   DoctorUnavailableError,
   InvalidStatusTransitionError,
@@ -152,6 +153,8 @@ export class AppointmentsService {
       throw new InvalidStatusTransitionError(`Cannot edit a ${appointment.status} appointment`);
     }
 
+    this.assertNotMovedIntoPast(input.startsAt, appointment.startsAt);
+
     await this.assertSameClinicReferences(input.clinicId, input.doctorId, input.patientId);
     await this.assertDoctorAvailable(input.clinicId, input.doctorId, input.startsAt, input.endsAt);
     await this.assertNoOverlap({
@@ -278,6 +281,13 @@ export class AppointmentsService {
       throw new CrossTenantAccessError(`Appointment ${id} does not belong to this clinic`);
     }
     return appointment;
+  }
+
+  private assertNotMovedIntoPast(newStart: Date, existingStart: Date): void {
+    const now = Date.now();
+    if (existingStart.getTime() >= now && newStart.getTime() < now) {
+      throw new AppointmentInThePastError('Cannot move an upcoming appointment to a time in the past');
+    }
   }
 
   private async assertSameClinicReferences(

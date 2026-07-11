@@ -12,3 +12,5 @@ export class InvalidStatusTransitionError extends DomainError {}
 export class DoctorUnavailableError extends DomainError {}
 
 export class CrossTenantAccessError extends DomainError {}
+
+export class AppointmentInThePastError extends DomainError {}

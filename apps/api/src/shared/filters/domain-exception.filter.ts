@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import {
+  AppointmentInThePastError,
   CrossTenantAccessError,
   DoctorUnavailableError,
   DomainError,
@@ -12,6 +13,7 @@ const STATUS_BY_ERROR = new Map<Function, HttpStatus>([
   [OverlappingAppointmentError, HttpStatus.CONFLICT],
   [InvalidStatusTransitionError, HttpStatus.UNPROCESSABLE_ENTITY],
   [DoctorUnavailableError, HttpStatus.UNPROCESSABLE_ENTITY],
+  [AppointmentInThePastError, HttpStatus.UNPROCESSABLE_ENTITY],
   [CrossTenantAccessError, HttpStatus.FORBIDDEN],
 ]);
 

@@ -500,6 +500,26 @@ it would add real surface area for a requirement nobody asked for here.
   the same breakpoint. One `AppointmentCalendar` component serves both
   form factors rather than maintaining a parallel mobile component tree.
 
+## "Not in the past" is a scheduling rule, not an editing rule
+
+- Creating and rescheduling reject a start time in the past (`@IsNotInPast()`
+  on the create/reschedule DTOs) — those are forward-looking actions, you're
+  choosing a new slot.
+- Editing (`PATCH /appointments/:id`) does **not** apply that DTO check. It was
+  there originally, and it made past appointments uneditable: the edit form
+  resubmits the appointment's existing start time, so any past appointment
+  failed validation even when only its reason/notes changed. Editing a
+  historical record is legitimate, so the blanket DTO check was wrong for this
+  route.
+- Instead the rule moved to the service and became change-aware
+  (`assertNotMovedIntoPast`): it rejects only when an **upcoming** appointment
+  is moved so its start lands in the past (`AppointmentInThePastError`, 422).
+  A past appointment stays freely editable; an upcoming one can't be shoved
+  backwards in time (which also guards the drag-to-another-doctor move, since
+  that uses the same update endpoint). The check lives in the service because
+  only it can compare the new time against the stored one — a DTO validator
+  can't see the existing row.
+
 ## Inline patient creation: client-orchestrated, no cross-entity transaction
 
 - The appointment form's patient field is a combobox: it searches existing
