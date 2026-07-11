@@ -104,7 +104,13 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd, appoin
             <Input
               type="datetime-local"
               value={startsAt}
-              onChange={(event) => setStartsAt(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setStartsAt(value);
+                if (value) {
+                  setEndsAt(toDateTimeLocalValue(new Date(new Date(value).getTime() + 60 * 60 * 1000)));
+                }
+              }}
               required
             />
           </Field>
