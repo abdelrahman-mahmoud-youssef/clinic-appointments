@@ -5,6 +5,8 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
+    "start:prod": "prisma migrate deploy && node dist/main",
+    "postinstall": "prisma generate",
     "dev": "nest start --watch",
     "test": "jest",
     "test:integration": "node --env-file=.env node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand",
