@@ -46,6 +46,9 @@ export default function StaffPage() {
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled });
   const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: listDoctors, enabled });
 
+  const linkedDoctorIds = new Set(users.map((user) => user.doctorId).filter(Boolean));
+  const availableDoctors = doctors.filter((doctor) => !linkedDoctorIds.has(doctor.id));
+
   const create = useMutation({
     mutationFn: () =>
       createUser({
@@ -115,15 +118,20 @@ export default function StaffPage() {
             </Select>
           </Field>
           {newRole === Role.DOCTOR && (
-            <Field label="Linked doctor">
+            <Field label="Doctor">
               <Select value={doctorId} onChange={(event) => setDoctorId(event.target.value)}>
                 <option value="">Not linked</option>
-                {doctors.map((doctor) => (
+                {availableDoctors.map((doctor) => (
                   <option key={doctor.id} value={doctor.id}>
                     {doctor.name}
                   </option>
                 ))}
               </Select>
+              {availableDoctors.length === 0 && (
+                <span className="text-xs font-normal text-ink-faint">
+                  Every doctor already has an account. Add a doctor on the Doctors page first.
+                </span>
+              )}
             </Field>
           )}
           {create.isError && (
