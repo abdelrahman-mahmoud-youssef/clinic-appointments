@@ -360,6 +360,7 @@ export function AppointmentCalendar() {
           onEventDrop={handleEventDrop}
           draggableAccessor={() => canBook && view === Views.DAY}
           resizable={false}
+          longPressThreshold={150}
           style={{ height: '100%' }}
           startAccessor="start"
           endAccessor="end"

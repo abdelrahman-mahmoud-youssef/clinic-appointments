@@ -148,6 +148,10 @@
     touch-action: none;
   }
 
+  .calendar-day .rbc-event * {
+    touch-action: none;
+  }
+
   .calendar-bookable .rbc-time-slot:not(.slot-closed):hover::after {
     content: '+';
     position: absolute;

@@ -588,6 +588,17 @@ it would add real surface area for a requirement nobody asked for here.
   tells the browser not to treat touch gestures on an event as scroll/zoom,
   handing the `touchmove` to rbc so the long-press-drag runs. It's scoped to
   the Day view's events only, so the time grid still scrolls normally when you
-  drag on empty slots. A short tap still opens the details modal; a held
-  long-press (rbc's 250ms default) starts the drag. The form route remains the
-  universal fallback for any view and any device.
+  drag on empty slots. `touch-action: none` is applied to the event *and its
+  descendants* so a touch landing on the chip's inner text still suppresses the
+  browser pan.
+- Touch drag is inherently best-effort, and the cause is in rbc: its long-press
+  gate cancels the pending drag on **any** `touchmove` during the hold — there
+  is zero movement tolerance (`Selection.js._addLongPressListener`). Holding a
+  finger perfectly still for the threshold is hard on a phone, which is why it
+  "sometimes works, sometimes not." We shorten `longPressThreshold` to 150ms
+  (from rbc's 250ms default) to shrink the window in which a stray move can
+  cancel the drag, while still short enough that a normal tap opens details
+  rather than starting a drag. This mitigates but can't fully eliminate the
+  flakiness — the guaranteed-reliable touch reschedule is the form route
+  (tap → details → Edit), and a tap-to-move gesture is the documented upgrade
+  path if drag reliability on touch becomes a hard requirement.
