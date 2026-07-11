@@ -96,8 +96,14 @@ confirm the API, Postgres, and Redis are all wired up.
   oxide binary is fetched into the final image right before `next build`.
 - **Empty database.** `start:prod` runs `prisma migrate deploy` on boot, so the
   schema + exclusion constraint are created automatically on first deploy.
-- **Web port.** `apps/web` start script is `next start -p ${PORT:-3001}`, so it
-  binds Railway's injected `$PORT` (a hardcoded port fails Railway's healthcheck).
+- **Web port / 502 Application failed to respond.** `apps/web` start script is
+  `next start -H 0.0.0.0 -p ${PORT:-3001}`. Two parts matter: `-p ${PORT...}`
+  binds Railway's injected `$PORT`, and `-H 0.0.0.0` binds all interfaces. Without
+  `-H 0.0.0.0`, Next may listen only on localhost, so the app starts fine ("Ready"
+  in the logs) but Railway's proxy can't reach it and returns 502 for every
+  request. If you still get 502 after this, check the web service's
+  Settings → Networking and confirm the public domain's target port matches the
+  port in the deploy log (e.g. 8080).
 - **Prisma client.** `apps/api` has a `postinstall: prisma generate`, so the
   client is generated during install with no extra build step.
 
