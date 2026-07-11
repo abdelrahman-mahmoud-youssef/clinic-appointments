@@ -38,21 +38,24 @@ and `pnpm --filter @clinic/web dev`, if you want their logs apart.)
 Open http://localhost:3001 and log in with any of the seeded accounts
 (password for all of them is `Password123!`):
 
-| Clinic          | Role         | Email                              |
-| ---------------- | ------------ | ----------------------------------- |
-| Sunrise Clinic  | Admin        | `admin@sunrise-clinic.test`         |
-| Sunrise Clinic  | Receptionist | `receptionist@sunrise-clinic.test`  |
-| Sunrise Clinic  | Doctor       | `doctor@sunrise-clinic.test`        |
-| Downtown Clinic | Admin        | `admin@downtown-clinic.test`        |
-| Downtown Clinic | Receptionist | `receptionist@downtown-clinic.test` |
-| Downtown Clinic | Doctor       | `doctor@downtown-clinic.test`       |
+| Clinic          | Role         | Email                                |
+| ---------------- | ------------ | ------------------------------------- |
+| Sunrise Clinic  | Admin        | `admin@sunrise-clinic.test`           |
+| Sunrise Clinic  | Receptionist | `receptionist@sunrise-clinic.test`    |
+| Sunrise Clinic  | Doctor       | `ahmed.hassan@sunrise-clinic.test`    |
+| Sunrise Clinic  | Doctor       | `mona.saleh@sunrise-clinic.test`      |
+| Downtown Clinic | Admin        | `admin@downtown-clinic.test`          |
+| Downtown Clinic | Receptionist | `receptionist@downtown-clinic.test`   |
+| Downtown Clinic | Doctor       | `youssef.nabil@downtown-clinic.test`  |
+| Downtown Clinic | Doctor       | `salma.fouad@downtown-clinic.test`    |
 
 Two clinics exist specifically so you can confirm cross-tenant isolation:
 data created in one is invisible to and unreachable from the other. Each
-clinic seeds two doctors with single Mon–Fri shifts within the clinic's
-operating hours (Sunrise 08:00–18:00, Downtown 09:00–17:00), a handful of
-patients, and a few upcoming appointments — including two at the same time
-for different doctors, so the calendar's per-doctor day columns are visible
+clinic seeds two doctors — every one with their own linked login (email
+derived from their name) and single Sunday–Thursday shifts in the clinic's
+`Africa/Cairo` operating window (09:00–21:00) — plus a handful of patients
+and a few upcoming appointments, including two at the same time for
+different doctors so the calendar's per-doctor day columns are visible
 immediately.
 
 ## Features

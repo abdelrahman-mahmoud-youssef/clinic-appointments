@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 const SEED_PASSWORD = 'Password123!';
-const WEEKDAYS = [1, 2, 3, 4, 5];
+const WORK_DAYS = [0, 1, 2, 3, 4];
 
 interface DoctorSeed {
   name: string;
@@ -25,37 +25,36 @@ const CLINICS: ClinicSeed[] = [
   {
     name: 'Sunrise Clinic',
     slug: 'sunrise-clinic',
-    timezone: 'America/New_York',
-    dayStartHour: 8,
-    dayEndHour: 18,
+    timezone: 'Africa/Cairo',
+    dayStartHour: 9,
+    dayEndHour: 21,
     doctors: [
-      { name: 'Dr. Alice Chen', startTime: '09:00', endTime: '17:00' },
-      { name: 'Dr. Bob Martinez', startTime: '08:00', endTime: '14:00' },
+      { name: 'Dr. Ahmed Hassan', startTime: '10:00', endTime: '18:00' },
+      { name: 'Dr. Mona Saleh', startTime: '12:00', endTime: '20:00' },
     ],
-    patients: ['John Doe', 'Jane Roe', 'Sam Patel', 'Maria Garcia'],
+    patients: ['Omar Ali', 'Fatma Ibrahim', 'Khaled Mostafa', 'Nour Adel'],
   },
   {
     name: 'Downtown Clinic',
     slug: 'downtown-clinic',
-    timezone: 'Europe/London',
+    timezone: 'Africa/Cairo',
     dayStartHour: 9,
-    dayEndHour: 17,
+    dayEndHour: 21,
     doctors: [
-      { name: 'Dr. Carol Ahmed', startTime: '09:00', endTime: '16:00' },
-      { name: 'Dr. David Okafor', startTime: '10:00', endTime: '17:00' },
+      { name: 'Dr. Youssef Nabil', startTime: '10:00', endTime: '16:00' },
+      { name: 'Dr. Salma Fouad', startTime: '13:00', endTime: '20:00' },
     ],
-    patients: ['Emma Wilson', 'Liam Brown', 'Olivia Jones'],
+    patients: ['Hana Mahmoud', 'Tarek Sami', 'Laila Hosny'],
   },
 ];
 
-function upcomingWeekday(index: number): Date {
+function upcomingWorkday(index: number): Date {
   const date = new Date();
-  date.setUTCHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
   let found = 0;
   for (let step = 0; step < 21; step += 1) {
-    date.setUTCDate(date.getUTCDate() + 1);
-    const day = date.getUTCDay();
-    if (day >= 1 && day <= 5) {
+    date.setDate(date.getDate() + 1);
+    if (WORK_DAYS.includes(date.getDay())) {
       if (found === index) return new Date(date);
       found += 1;
     }
@@ -65,9 +64,17 @@ function upcomingWeekday(index: number): Date {
 
 function slotAt(day: Date, hour: number, minute: number): { startsAt: Date; endsAt: Date } {
   const startsAt = new Date(day);
-  startsAt.setUTCHours(hour, minute, 0, 0);
+  startsAt.setHours(hour, minute, 0, 0);
   const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
   return { startsAt, endsAt };
+}
+
+function doctorEmailLocalPart(name: string): string {
+  return name
+    .replace(/^Dr\.?\s*/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/(^\.|\.$)/g, '');
 }
 
 async function seedAppointments(
@@ -76,15 +83,16 @@ async function seedAppointments(
   patients: Patient[],
   createdBy: string,
 ): Promise<void> {
-  const dayOne = upcomingWeekday(0);
-  const dayTwo = upcomingWeekday(1);
+  const dayOne = upcomingWorkday(0);
+  const dayTwo = upcomingWorkday(1);
 
   const plan = [
-    { day: dayOne, hour: 12, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.SCHEDULED, reason: 'Annual check-up' },
-    { day: dayOne, hour: 12, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.CONFIRMED, reason: 'Consultation' },
-    { day: dayOne, hour: 13, minute: 30, doctor: 0, patient: 2, status: AppointmentStatus.SCHEDULED, reason: 'Follow-up' },
-    { day: dayTwo, hour: 12, minute: 30, doctor: 1, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Blood test review' },
-    { day: dayTwo, hour: 14, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.CANCELLED, reason: 'Rescheduled by patient' },
+    { day: dayOne, hour: 11, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.SCHEDULED, reason: 'Annual check-up' },
+    { day: dayOne, hour: 14, minute: 0, doctor: 0, patient: 2, status: AppointmentStatus.CONFIRMED, reason: 'Follow-up' },
+    { day: dayOne, hour: 14, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.CONFIRMED, reason: 'Consultation' },
+    { day: dayOne, hour: 16, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.SCHEDULED, reason: 'Lab results' },
+    { day: dayTwo, hour: 13, minute: 30, doctor: 1, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Blood test review' },
+    { day: dayTwo, hour: 15, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.CANCELLED, reason: 'Rescheduled by patient' },
   ];
 
   for (const item of plan) {
@@ -132,7 +140,7 @@ async function main() {
         data: { clinicId: clinic.id, name: doctorSeed.name },
       });
       await prisma.doctorAvailability.createMany({
-        data: WEEKDAYS.map((weekday) => ({
+        data: WORK_DAYS.map((weekday) => ({
           clinicId: clinic.id,
           doctorId: doctor.id,
           weekday,
@@ -140,6 +148,13 @@ async function main() {
           endTime: doctorSeed.endTime,
         })),
       });
+
+      const email = `${doctorEmailLocalPart(doctorSeed.name)}@${seed.slug}.test`;
+      await prisma.user.create({
+        data: { clinicId: clinic.id, email, hashedPassword, role: Role.DOCTOR, doctorId: doctor.id },
+      });
+      credentials.push({ clinic: seed.name, role: 'DOCTOR', email, password: SEED_PASSWORD });
+
       doctors.push(doctor);
     }
 
@@ -159,22 +174,12 @@ async function main() {
         role: Role.RECEPTIONIST,
       },
     });
-    const doctorUser = await prisma.user.create({
-      data: {
-        clinicId: clinic.id,
-        email: `doctor@${seed.slug}.test`,
-        hashedPassword,
-        role: Role.DOCTOR,
-        doctorId: doctors[0].id,
-      },
-    });
 
     await seedAppointments(clinic.id, doctors, patients, admin.id);
 
     credentials.push(
       { clinic: seed.name, role: 'ADMIN', email: admin.email, password: SEED_PASSWORD },
       { clinic: seed.name, role: 'RECEPTIONIST', email: receptionist.email, password: SEED_PASSWORD },
-      { clinic: seed.name, role: 'DOCTOR', email: doctorUser.email, password: SEED_PASSWORD },
     );
   }
 
