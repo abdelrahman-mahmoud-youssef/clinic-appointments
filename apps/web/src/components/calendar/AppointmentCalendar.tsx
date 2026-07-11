@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, endOfWeek, startOfDay, endOfDay, getDay, set } from 'date-fns';
+import { format, parse, startOfWeek, startOfDay, endOfDay, getDay, set } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -22,6 +22,7 @@ import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { Banner } from '@/components/ui/Banner';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { STATUS_COLORS } from './statusColors';
 import { FiltersBar } from './FiltersBar';
 import { CalendarToolbar } from './CalendarToolbar';
@@ -36,7 +37,6 @@ const localizer = dateFnsLocalizer({
 });
 
 const SLOT_STEP_MINUTES = 30;
-const MOBILE_BREAKPOINT = 640;
 const DEFAULT_DAY_START_HOUR = 12;
 const DEFAULT_DAY_END_HOUR = 24;
 
@@ -63,9 +63,6 @@ const DragAndDropCalendar = withDragAndDrop<CalendarEvent>(Calendar);
 
 const CALENDAR_VIEWS: View[] = [Views.DAY, Views.WEEK, Views.MONTH];
 
-// Adapts react-big-calendar's own ToolbarProps (whose `views` field is a
-// { day?, week?, ... } map, not a plain list) to CalendarToolbar's simpler,
-// explicit availableViews prop.
 function ToolbarAdapter(props: ToolbarProps<CalendarEvent, object>) {
   return (
     <CalendarToolbar
@@ -80,7 +77,7 @@ function ToolbarAdapter(props: ToolbarProps<CalendarEvent, object>) {
 
 function computeInitialRange(): DateRange {
   const now = new Date();
-  return { from: startOfWeek(now), to: endOfWeek(now) };
+  return { from: startOfDay(now), to: endOfDay(now) };
 }
 
 export function AppointmentCalendar() {
@@ -90,8 +87,11 @@ export function AppointmentCalendar() {
 
   const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [date, setDate] = useState<Date>(() => new Date());
-  const [view, setView] = useState<View>(Views.WEEK);
+  const [view, setView] = useState<View>(Views.DAY);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ event: CalendarEvent; start: Date; end: Date } | null>(
+    null,
+  );
   const [isCreating, setIsCreating] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [closedSlotNotice, setClosedSlotNotice] = useState<string | null>(null);
@@ -113,15 +113,6 @@ export function AppointmentCalendar() {
     [pathname, router, searchParams],
   );
 
-  // Default to Day view on narrow screens. Adjusted after mount, not during
-  // the initial render, so the server-rendered markup and the first client
-  // render still match (no layout-shift/hydration warning).
-  useEffect(() => {
-    if (window.innerWidth < MOBILE_BREAKPOINT) {
-      setView(Views.DAY);
-    }
-  }, []);
-
   const { data: appointments = [] } = useQuery({
     queryKey: ['appointments', range.from.toISOString(), range.to.toISOString(), doctorFilter, statusFilter],
     queryFn: () =>
@@ -133,9 +124,6 @@ export function AppointmentCalendar() {
       }),
   });
 
-  // Closed-slot shading is inherently per-doctor, so it only activates once a
-  // specific doctor is chosen in the filter — "closed" has no single meaning
-  // across every doctor at once.
   const { data: doctorWindows } = useQuery({
     queryKey: ['doctor-availability', doctorFilter],
     queryFn: () => getDoctorAvailability(doctorFilter as string),
@@ -215,14 +203,20 @@ export function AppointmentCalendar() {
 
   const handleEventDrop = useCallback(
     ({ event, start, end }: EventInteractionArgs<CalendarEvent>) => {
-      reschedule.mutate({
-        id: event.id,
-        startsAt: new Date(start).toISOString(),
-        endsAt: new Date(end).toISOString(),
-      });
+      setPendingMove({ event, start: new Date(start), end: new Date(end) });
     },
-    [reschedule],
+    [],
   );
+
+  const confirmMove = useCallback(() => {
+    if (!pendingMove) return;
+    reschedule.mutate({
+      id: pendingMove.event.id,
+      startsAt: pendingMove.start.toISOString(),
+      endsAt: pendingMove.end.toISOString(),
+    });
+    setPendingMove(null);
+  }, [pendingMove, reschedule]);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     setSelectedAppointment(event.resource);
@@ -259,7 +253,7 @@ export function AppointmentCalendar() {
       <div
         className={`h-[520px] overflow-hidden rounded-lg border border-line bg-surface p-2 sm:h-[640px] sm:p-4${
           canBook ? ' calendar-bookable' : ''
-        }`}
+        }${canBook && view === Views.DAY ? ' calendar-day' : ''}`}
       >
         <DragAndDropCalendar
           localizer={localizer}
@@ -280,7 +274,7 @@ export function AppointmentCalendar() {
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onEventDrop={handleEventDrop}
-          draggableAccessor={() => canBook}
+          draggableAccessor={() => canBook && view === Views.DAY}
           resizable={false}
           style={{ height: '100%' }}
           startAccessor="start"
@@ -301,6 +295,29 @@ export function AppointmentCalendar() {
           appointment={selectedAppointment}
           onClose={() => setSelectedAppointment(null)}
         />
+      )}
+      {pendingMove && (
+        <Modal title="Reschedule appointment" onClose={() => setPendingMove(null)}>
+          <p className="text-sm text-ink-soft">{pendingMove.event.title}</p>
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-ink-faint">From</dt>
+              <dd className="font-data text-ink">{format(pendingMove.event.start, 'EEE d MMM, HH:mm')}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-ink-faint">To</dt>
+              <dd className="font-data text-ink">{format(pendingMove.start, 'EEE d MMM, HH:mm')}</dd>
+            </div>
+          </dl>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPendingMove(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={confirmMove}>
+              Confirm
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -143,9 +143,8 @@
     cursor: pointer;
   }
 
-  .calendar-bookable .rbc-time-slot:not(.slot-closed):hover,
-  .calendar-bookable .rbc-day-bg:not(.slot-closed):not(.rbc-off-range-bg):hover {
-    background-color: var(--color-brand-soft);
+  .calendar-day .rbc-event {
+    cursor: grab;
   }
 
   .calendar-bookable .rbc-time-slot:not(.slot-closed):hover::after {
