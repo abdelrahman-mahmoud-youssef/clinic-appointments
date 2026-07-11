@@ -1,21 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Appointment, AppointmentStatus, Prisma } from '@prisma/client';
+import { INACTIVE_STATUSES } from '@clinic/shared';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import { OverlappingAppointmentError } from '../../shared/errors/domain-errors';
 
-// Raised by the raw-SQL exclusion constraint (see prisma/migrations/*_add_no_double_booking_constraint).
-// Prisma has no built-in error code for it, so it surfaces as an unknown request
-// error with the SQLSTATE and constraint name embedded in the message text.
-//
-// Two distinct Postgres error shapes can result from the SAME double-booking race,
-// depending on which lock the two concurrent transactions contend over first:
-// a clean exclusion-constraint violation (23P01, message names the constraint), or
-// a deadlock between the two transactions inserting into the same GiST index range
-// (40P01, message is "deadlock detected"). Confirmed empirically under
-// Promise.allSettled concurrency — real runs produced both. Both are treated as the
-// same domain error because create()/update() each run a single INSERT/UPDATE with
-// no other locks in play; a future method that takes other locks in the same
-// transaction would need to reconsider this.
 const EXCLUSION_CONSTRAINT_NAME = 'no_double_booking';
 const DEADLOCK_MESSAGE = 'deadlock detected';
 
@@ -79,7 +67,7 @@ export class AppointmentsRepository {
         clinicId: query.clinicId,
         doctorId: query.doctorId,
         id: query.excludeAppointmentId ? { not: query.excludeAppointmentId } : undefined,
-        status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] },
+        status: { notIn: INACTIVE_STATUSES as AppointmentStatus[] },
         startsAt: { lt: query.endsAt },
         endsAt: { gt: query.startsAt },
       },
@@ -89,7 +77,7 @@ export class AppointmentsRepository {
   async update(
     id: string,
     clinicId: string,
-    data: Prisma.AppointmentUpdateInput,
+    data: Prisma.AppointmentUncheckedUpdateInput,
   ): Promise<Appointment | null> {
     try {
       const result = await this.prisma.appointment.updateMany({ where: { id, clinicId }, data });

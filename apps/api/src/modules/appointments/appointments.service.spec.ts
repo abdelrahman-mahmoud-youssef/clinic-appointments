@@ -152,6 +152,20 @@ describe('AppointmentsService', () => {
       );
       expect(result.reason).toBe('Updated');
     });
+
+    it('persists doctor and patient as scalar ids, not relation writes', async () => {
+      const appointment = buildAppointment();
+      repo.findById.mockResolvedValue(appointment);
+      repo.findOverlapping.mockResolvedValue([]);
+      repo.update.mockResolvedValue(appointment);
+
+      await service.update(editInput);
+
+      const data = repo.update.mock.calls[0][2];
+      expect(data).toMatchObject({ doctorId: 'doctor-1', patientId: 'patient-1' });
+      expect(data).not.toHaveProperty('doctor');
+      expect(data).not.toHaveProperty('patient');
+    });
   });
 
   describe('changeStatus', () => {

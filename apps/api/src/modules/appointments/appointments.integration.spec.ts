@@ -2,21 +2,17 @@ import { PrismaClient } from '@prisma/client';
 import { AppointmentStatus, Role } from '@clinic/shared';
 import { AvailabilityRepository } from '../doctors/availability.repository';
 import { AvailabilityService } from '../doctors/availability.service';
+import { ClinicsRepository } from '../clinics/clinics.repository';
+import { ClinicsService } from '../clinics/clinics.service';
 import { AppointmentsRepository } from './appointments.repository';
 import { AppointmentsService } from './appointments.service';
-import { CrossTenantAccessError, OverlappingAppointmentError } from '../../shared/errors/domain-errors';
+import {
+  CrossTenantAccessError,
+  InvalidStatusTransitionError,
+  OverlappingAppointmentError,
+} from '../../shared/errors/domain-errors';
 
-// Runs against the real docker-compose Postgres (see jest.integration.config.js /
-// package.json's test:integration script). Fixtures are dedicated throwaway
-// clinics created in beforeAll and torn down in afterAll, so it's safe to
-// re-run repeatedly and never touches the seeded dev data.
-//
-// This file exercises overlap/concurrency/tenancy through the real
-// AvailabilityService, not a stub — but it deliberately doesn't stand up a real
-// Redis connection: caching behavior (hit, miss, Redis-down fallback) already has
-// its own dedicated unit tests, and a fake client whose commands always reject
-// exercises the exact same safeRedisCall fallback path deterministically, without
-// coupling this Postgres-focused suite to a second live service.
+
 const alwaysFailingRedis = {
   get: () => Promise.reject(new Error('no redis in this test')),
   set: () => Promise.reject(new Error('no redis in this test')),
@@ -26,37 +22,45 @@ const alwaysFailingRedis = {
 describe('Appointments integration (real Postgres)', () => {
   const prisma = new PrismaClient();
   const repository = new AppointmentsRepository(prisma as any);
+  const clinicsService = new ClinicsService(new ClinicsRepository(prisma as any));
   const availabilityService = new AvailabilityService(
     new AvailabilityRepository(prisma as any),
+    clinicsService,
     alwaysFailingRedis,
   );
-  const service = new AppointmentsService(repository, availabilityService);
+  const service = new AppointmentsService(repository, availabilityService, clinicsService);
 
   const ALL_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
   let clinicA: { id: string };
   let clinicB: { id: string };
   let doctorA: { id: string };
+  let doctorB: { id: string };
   let patientA: { id: string };
+  let patientB: { id: string };
 
   beforeAll(async () => {
     await prisma.$connect();
     clinicA = await prisma.clinic.create({ data: { name: 'Integration Test Clinic A', timezone: 'UTC' } });
     clinicB = await prisma.clinic.create({ data: { name: 'Integration Test Clinic B', timezone: 'UTC' } });
     doctorA = await prisma.doctor.create({ data: { clinicId: clinicA.id, name: 'Test Doctor A' } });
+    doctorB = await prisma.doctor.create({ data: { clinicId: clinicA.id, name: 'Test Doctor B' } });
     patientA = await prisma.patient.create({ data: { clinicId: clinicA.id, name: 'Test Patient A' } });
+    patientB = await prisma.patient.create({ data: { clinicId: clinicA.id, name: 'Test Patient B' } });
 
     // These tests exercise overlap/concurrency/tenancy, not working-hours logic
-    // (which has its own dedicated tests) — give doctorA an unrestricted week so
-    // availability never incidentally blocks a fixture appointment.
+    // (which has its own dedicated tests) — give the doctors an unrestricted week
+    // so availability never incidentally blocks a fixture appointment.
     await prisma.doctorAvailability.createMany({
-      data: ALL_WEEKDAYS.map((weekday) => ({
-        clinicId: clinicA.id,
-        doctorId: doctorA.id,
-        weekday,
-        startTime: '00:00',
-        endTime: '23:59',
-      })),
+      data: [doctorA.id, doctorB.id].flatMap((doctorId) =>
+        ALL_WEEKDAYS.map((weekday) => ({
+          clinicId: clinicA.id,
+          doctorId,
+          weekday,
+          startTime: '00:00',
+          endTime: '23:59',
+        })),
+      ),
     });
   });
 
@@ -201,5 +205,99 @@ describe('Appointments integration (real Postgres)', () => {
     });
 
     expect(rebooked.status).toBe(AppointmentStatus.SCHEDULED);
+  });
+
+  it('edits doctor, patient, time, reason, and notes and persists them', async () => {
+    const appointment = await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-06-01T09:00:00Z'),
+      endsAt: new Date('2030-06-01T09:30:00Z'),
+      actorUserId: 'tester',
+    });
+
+    const updated = await service.update({
+      id: appointment.id,
+      clinicId: clinicA.id,
+      doctorId: doctorB.id,
+      patientId: patientB.id,
+      startsAt: new Date('2030-06-01T14:00:00Z'),
+      endsAt: new Date('2030-06-01T15:00:00Z'),
+      reason: 'Rescheduled review',
+      notes: 'Moved to the afternoon',
+      actorUserId: 'tester',
+    });
+
+    expect(updated.doctorId).toBe(doctorB.id);
+    expect(updated.patientId).toBe(patientB.id);
+    expect(updated.reason).toBe('Rescheduled review');
+
+    const persisted = await service.findOne(appointment.id, clinicA.id);
+    expect(persisted.doctorId).toBe(doctorB.id);
+    expect(persisted.patientId).toBe(patientB.id);
+    expect(persisted.notes).toBe('Moved to the afternoon');
+    expect(persisted.startsAt.toISOString()).toBe(new Date('2030-06-01T14:00:00Z').toISOString());
+  });
+
+  it('rejects an edit that overlaps another appointment for the same doctor', async () => {
+    await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-07-01T09:00:00Z'),
+      endsAt: new Date('2030-07-01T09:30:00Z'),
+      actorUserId: 'tester',
+    });
+    const second = await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-07-01T11:00:00Z'),
+      endsAt: new Date('2030-07-01T11:30:00Z'),
+      actorUserId: 'tester',
+    });
+
+    await expect(
+      service.update({
+        id: second.id,
+        clinicId: clinicA.id,
+        doctorId: doctorA.id,
+        patientId: patientA.id,
+        startsAt: new Date('2030-07-01T09:15:00Z'),
+        endsAt: new Date('2030-07-01T09:45:00Z'),
+        actorUserId: 'tester',
+      }),
+    ).rejects.toThrow(OverlappingAppointmentError);
+  });
+
+  it('rejects editing a terminal appointment', async () => {
+    const appointment = await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-08-01T09:00:00Z'),
+      endsAt: new Date('2030-08-01T09:30:00Z'),
+      actorUserId: 'tester',
+    });
+    await service.changeStatus({
+      id: appointment.id,
+      clinicId: clinicA.id,
+      status: AppointmentStatus.CANCELLED,
+      actorUserId: 'tester',
+      actorRole: Role.ADMIN,
+    });
+
+    await expect(
+      service.update({
+        id: appointment.id,
+        clinicId: clinicA.id,
+        doctorId: doctorA.id,
+        patientId: patientA.id,
+        startsAt: new Date('2030-08-01T10:00:00Z'),
+        endsAt: new Date('2030-08-01T10:30:00Z'),
+        actorUserId: 'tester',
+      }),
+    ).rejects.toThrow(InvalidStatusTransitionError);
   });
 });

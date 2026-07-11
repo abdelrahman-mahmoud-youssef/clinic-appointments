@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AppointmentStatus, Role } from '@clinic/shared';
+import { AppointmentStatus, INACTIVE_STATUSES, Role } from '@clinic/shared';
 import { Appointment } from '@prisma/client';
 import {
   CrossTenantAccessError,
@@ -83,8 +83,6 @@ export interface AppointmentSummary {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const TERMINAL_INACTIVE: AppointmentStatus[] = [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW];
-
 @Injectable()
 export class AppointmentsService {
   constructor(
@@ -159,8 +157,8 @@ export class AppointmentsService {
     });
 
     const updated = await this.appointmentsRepository.update(appointment.id, input.clinicId, {
-      patient: { connect: { id: input.patientId } },
-      doctor: { connect: { id: input.doctorId } },
+      patientId: input.patientId,
+      doctorId: input.doctorId,
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       reason: input.reason,
@@ -208,7 +206,7 @@ export class AppointmentsService {
     for (const appointment of appointments) {
       const status = appointment.status as AppointmentStatus;
       counts[status] += 1;
-      if (!TERMINAL_INACTIVE.includes(status)) {
+      if (!INACTIVE_STATUSES.includes(status)) {
         active += 1;
       }
     }
@@ -238,7 +236,7 @@ export class AppointmentsService {
 
     const active = new Map<string, number>();
     for (const appointment of appointments) {
-      if (TERMINAL_INACTIVE.includes(appointment.status as AppointmentStatus)) {
+      if (INACTIVE_STATUSES.includes(appointment.status as AppointmentStatus)) {
         continue;
       }
       const key = formatter.format(appointment.startsAt);
