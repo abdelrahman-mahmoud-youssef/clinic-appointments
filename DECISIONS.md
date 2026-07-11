@@ -499,3 +499,24 @@ it would add real surface area for a requirement nobody asked for here.
   toolbar swaps a segmented Day/Week/Month control for a `<select>` at
   the same breakpoint. One `AppointmentCalendar` component serves both
   form factors rather than maintaining a parallel mobile component tree.
+
+## Frontend: drag-reschedule is Day-view + pointer only, form is the universal path
+
+- Drag-to-reschedule is enabled only in **Day view** (`draggableAccessor`
+  gated on `view === Views.DAY`). Day view is the only one with a
+  fine-grained time grid, so dropping an event lands on a precise 30-minute
+  slot; dropping in Week or Month view could only resolve to a whole day,
+  which isn't a reschedule anyone means. Rescheduling from Week/Month (and
+  any full edit) goes through the form instead: click an appointment →
+  details → Edit, with explicit start/end inputs.
+- Drag is also disabled on **coarse-pointer (touch) devices**
+  (`window.matchMedia('(pointer: coarse)')`, read post-mount to avoid an SSR
+  hydration mismatch). react-big-calendar's DnD addon does support touch via
+  a long-press (its `Selection` layer binds touch events, not HTML5 drag),
+  but on mobile it competes with page scroll — the addon only registers a
+  passive `touchmove` listener, so it can't reliably `preventDefault` the
+  scroll, and the result is a janky, undiscoverable half-drag. Rather than
+  ship that, touch users get the same universal path: tapping an appointment
+  opens its details, where reschedule/edit via the form works cleanly on
+  touch. This is a deliberate fallback, not a missing feature — the form
+  route already exists and covers every view and every input device.
