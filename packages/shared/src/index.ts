@@ -12,5 +12,10 @@ export enum Role {
   DOCTOR = 'DOCTOR',
 }
 
+export const INACTIVE_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.CANCELLED,
+  AppointmentStatus.NO_SHOW,
+];
+
 export * from './appointment-status-transitions';
 export * from './working-hours';
