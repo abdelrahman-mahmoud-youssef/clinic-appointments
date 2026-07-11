@@ -14,8 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Banner } from '@/components/ui/Banner';
 import { AppointmentFormModal } from './AppointmentFormModal';
 
-const ACTION_LABELS: Record<AppointmentStatus, string> = {
-  [AppointmentStatus.SCHEDULED]: 'Mark scheduled',
+const ACTION_LABELS: Partial<Record<AppointmentStatus, string>> = {
   [AppointmentStatus.CONFIRMED]: 'Confirm',
   [AppointmentStatus.COMPLETED]: 'Complete',
   [AppointmentStatus.CANCELLED]: 'Cancel',
