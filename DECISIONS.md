@@ -570,35 +570,37 @@ it would add real surface area for a requirement nobody asked for here.
   arbitrary date ranges, needs pages (a "Load more" button via
   `useInfiniteQuery`).
 
-## Frontend: drag-reschedule is Day-view only, works on pointer and touch
+## Frontend: desktop drag via rbc, a custom pointer-events drag on touch
 
-- Drag-to-reschedule is enabled only in **Day view** (`draggableAccessor`
-  gated on `view === Views.DAY`). Day view is the only one with a
-  fine-grained time grid, so dropping an event lands on a precise 30-minute
-  slot; dropping in Week or Month view could only resolve to a whole day,
-  which isn't a reschedule anyone means. Rescheduling from Week/Month (and
-  any full edit) goes through the form instead: click an appointment →
-  details → Edit, with explicit start/end inputs.
-- Drag works on **touch as well as pointer**. react-big-calendar's DnD addon
-  supports touch via a long-press (its `Selection` layer binds touch events,
-  not HTML5 drag). The catch is that touch-drag competes with page scroll —
-  the addon only registers a passive `touchmove` listener, so it can't
-  `preventDefault` the scroll on its own. The fix is `touch-action: none` on
-  the draggable event (`.calendar-day .rbc-event` in `globals.css`), which
-  tells the browser not to treat touch gestures on an event as scroll/zoom,
-  handing the `touchmove` to rbc so the long-press-drag runs. It's scoped to
-  the Day view's events only, so the time grid still scrolls normally when you
-  drag on empty slots. `touch-action: none` is applied to the event *and its
-  descendants* so a touch landing on the chip's inner text still suppresses the
-  browser pan.
-- Touch drag is inherently best-effort, and the cause is in rbc: its long-press
-  gate cancels the pending drag on **any** `touchmove` during the hold — there
-  is zero movement tolerance (`Selection.js._addLongPressListener`). Holding a
-  finger perfectly still for the threshold is hard on a phone, which is why it
-  "sometimes works, sometimes not." We shorten `longPressThreshold` to 150ms
-  (from rbc's 250ms default) to shrink the window in which a stray move can
-  cancel the drag, while still short enough that a normal tap opens details
-  rather than starting a drag. This mitigates but can't fully eliminate the
-  flakiness — the guaranteed-reliable touch reschedule is the form route
-  (tap → details → Edit), and a tap-to-move gesture is the documented upgrade
-  path if drag reliability on touch becomes a hard requirement.
+- Drag-to-reschedule is enabled only in **Day view** (`draggableAccessor`).
+  Day view is the only one with a fine-grained time grid, so a drop lands on a
+  precise 30-minute slot; Week/Month could only resolve to a whole day.
+  Rescheduling from those (and any full edit) goes through the form.
+- **On desktop (fine pointer), react-big-calendar's own drag handles it.** On
+  **touch, we replace it with a custom Pointer-Events drag** (`useEventTouchDrag`
+  + `EventDragContext`, wired through `EventChip`). rbc's touch drag was proven
+  unusable and unfixable: its drag arms only after a 250ms **motionless**
+  long-press that **any** `touchmove` cancels (`Selection.js`), and the DnD addon
+  constructs its `Selection` with no options so `longPressThreshold` is pinned to
+  250ms and ignores the prop entirely (verified from source and with a
+  Playwright touch harness). Holding a finger perfectly still for 250ms is a
+  coin-flip on a phone — the "sometimes works, sometimes not." So rbc drag is
+  gated off on coarse pointers (`matchMedia('(pointer: coarse)')`) and the custom
+  drag takes over.
+- The custom drag uses a **movement threshold, not a hold** (~8px), so it's not
+  timing-sensitive. `EventChip` attaches its `pointerdown` to the whole
+  `.rbc-event` element (rbc renders an `.rbc-event-label` over the chip, so a
+  chip-only handler would miss touches — found via Playwright). Once past the
+  threshold it captures the pointer, blocks scroll (`touch-action: none` on
+  events + a non-passive `touchmove` preventer), shows a target-time badge,
+  auto-scrolls near the grid edges, and on release computes the drop slot from
+  the `.rbc-time-content` geometry (and the doctor column, for the resource
+  view). It reuses the same confirm modal and reschedule/move mutations as the
+  desktop path. A short tap still opens details; a `justDragged` guard suppresses
+  the stray click after a drag.
+- **Event chips fill their box.** rbc ships an unlayered `.rbc-event-label`
+  (redundant with the chip's own time) plus a 10px `events-container` gutter, and
+  because unlayered CSS beats `@layer` rules, our overrides need `!important`:
+  the label is hidden, the gutter zeroed, and the event set to
+  `column nowrap`/`align-items: stretch` so the chip is full-width and centered
+  instead of a narrow, top-left-pinned box.

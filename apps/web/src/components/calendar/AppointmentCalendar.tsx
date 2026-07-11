@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
@@ -40,6 +40,8 @@ import { STATUS_COLORS } from './statusColors';
 import { FiltersBar } from './FiltersBar';
 import { CalendarToolbar } from './CalendarToolbar';
 import { EventChip } from './EventChip';
+import { CalendarEvent, EventDragContext } from './eventDrag';
+import { DragConfig, useEventTouchDrag } from './useEventTouchDrag';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -62,15 +64,6 @@ function hourToTime(hour: number): Date {
 interface DateRange {
   from: Date;
   to: Date;
-}
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  resourceId: string;
-  resource: Appointment;
 }
 
 const DragAndDropCalendar = withDragAndDrop<CalendarEvent>(Calendar);
@@ -110,6 +103,7 @@ export function AppointmentCalendar() {
   const setFilter = useSetFilter();
 
   const [view, setView] = useState<View>(Views.DAY);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date; doctorId?: string } | null>(
     null,
   );
@@ -136,6 +130,10 @@ export function AppointmentCalendar() {
     [dateParam],
   );
   const range = useMemo(() => visibleRange(date, view), [date, view]);
+
+  useEffect(() => {
+    setIsCoarsePointer(window.matchMedia('(pointer: coarse)').matches);
+  }, []);
 
   const { data: appointments = [] } = useQuery({
     queryKey: [
@@ -199,6 +197,26 @@ export function AppointmentCalendar() {
   const dayEndHour = clinicSettings?.dayEndHour ?? DEFAULT_DAY_END_HOUR;
   const minTime = useMemo(() => hourToTime(dayStartHour), [dayStartHour]);
   const maxTime = useMemo(() => hourToTime(dayEndHour), [dayEndHour]);
+
+  const dragConfigRef = useRef<DragConfig>({
+    date,
+    dayStartHour,
+    dayEndHour,
+    resources,
+    showResources,
+    onDrop: () => {},
+  });
+  dragConfigRef.current = {
+    date,
+    dayStartHour,
+    dayEndHour,
+    resources,
+    showResources,
+    onDrop: ({ event, start, end, doctorId }) =>
+      setPendingMove({ event, start, end, targetDoctorId: doctorId }),
+  };
+  const { start: startEventDrag, preview: dragPreview, justDraggedRef } =
+    useEventTouchDrag(dragConfigRef);
 
   const events: CalendarEvent[] = useMemo(
     () =>
@@ -290,9 +308,16 @@ export function AppointmentCalendar() {
     setPendingMove(null);
   }, [pendingMove, reschedule, move]);
 
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    setSelectedAppointment(event.resource);
-  }, []);
+  const handleSelectEvent = useCallback(
+    (event: CalendarEvent) => {
+      if (justDraggedRef.current) {
+        justDraggedRef.current = false;
+        return;
+      }
+      setSelectedAppointment(event.resource);
+    },
+    [justDraggedRef],
+  );
 
   const isDoctorMove =
     pendingMove != null &&
@@ -332,6 +357,7 @@ export function AppointmentCalendar() {
       )}
       {closedSlotNotice && <Banner onDismiss={() => setClosedSlotNotice(null)}>{closedSlotNotice}</Banner>}
 
+      <EventDragContext.Provider value={canBook && view === Views.DAY ? startEventDrag : null}>
       <div
         className={`h-[520px] overflow-hidden rounded-lg border border-line bg-surface p-2 sm:h-[640px] sm:p-4${
           canBook ? ' calendar-bookable' : ''
@@ -358,15 +384,24 @@ export function AppointmentCalendar() {
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onEventDrop={handleEventDrop}
-          draggableAccessor={() => canBook && view === Views.DAY}
+          draggableAccessor={() => canBook && view === Views.DAY && !isCoarsePointer}
           resizable={false}
-          longPressThreshold={150}
           style={{ height: '100%' }}
           startAccessor="start"
           endAccessor="end"
           components={{ toolbar: ToolbarAdapter, event: EventChip }}
         />
       </div>
+      </EventDragContext.Provider>
+
+      {dragPreview && (
+        <div
+          className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-9 rounded-md bg-ink px-2 py-1 font-data text-xs font-semibold text-white shadow-lg"
+          style={{ left: dragPreview.x, top: dragPreview.y }}
+        >
+          {dragPreview.label}
+        </div>
+      )}
 
       {isCreating && (
         <AppointmentFormModal
