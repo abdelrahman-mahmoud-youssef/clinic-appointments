@@ -62,6 +62,20 @@ function upcomingWorkday(index: number): Date {
   return date;
 }
 
+function pastWorkday(index: number): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  let found = 0;
+  for (let step = 0; step < 21; step += 1) {
+    date.setDate(date.getDate() - 1);
+    if (WORK_DAYS.includes(date.getDay())) {
+      if (found === index) return new Date(date);
+      found += 1;
+    }
+  }
+  return date;
+}
+
 function slotAt(day: Date, hour: number, minute: number): { startsAt: Date; endsAt: Date } {
   const startsAt = new Date(day);
   startsAt.setHours(hour, minute, 0, 0);
@@ -83,16 +97,30 @@ async function seedAppointments(
   patients: Patient[],
   createdBy: string,
 ): Promise<void> {
-  const dayOne = upcomingWorkday(0);
-  const dayTwo = upcomingWorkday(1);
+  const past2 = pastWorkday(1);
+  const past1 = pastWorkday(0);
+  const day0 = upcomingWorkday(0);
+  const day1 = upcomingWorkday(1);
+  const day2 = upcomingWorkday(2);
+  const day3 = upcomingWorkday(3);
 
   const plan = [
-    { day: dayOne, hour: 11, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.SCHEDULED, reason: 'Annual check-up' },
-    { day: dayOne, hour: 14, minute: 0, doctor: 0, patient: 2, status: AppointmentStatus.CONFIRMED, reason: 'Follow-up' },
-    { day: dayOne, hour: 14, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.CONFIRMED, reason: 'Consultation' },
-    { day: dayOne, hour: 16, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.SCHEDULED, reason: 'Lab results' },
-    { day: dayTwo, hour: 13, minute: 30, doctor: 1, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Blood test review' },
-    { day: dayTwo, hour: 15, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.CANCELLED, reason: 'Rescheduled by patient' },
+    { day: past2, hour: 11, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.COMPLETED, reason: 'Annual check-up' },
+    { day: past2, hour: 11, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.COMPLETED, reason: 'Consultation' },
+    { day: past2, hour: 14, minute: 0, doctor: 0, patient: 2, status: AppointmentStatus.NO_SHOW, reason: 'Follow-up' },
+    { day: past1, hour: 12, minute: 0, doctor: 1, patient: 0, status: AppointmentStatus.COMPLETED, reason: 'Blood test review' },
+    { day: past1, hour: 15, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.COMPLETED, reason: 'Physiotherapy' },
+    { day: day0, hour: 11, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Annual check-up' },
+    { day: day0, hour: 14, minute: 0, doctor: 0, patient: 2, status: AppointmentStatus.SCHEDULED, reason: 'Lab results' },
+    { day: day0, hour: 14, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.CONFIRMED, reason: 'Consultation' },
+    { day: day0, hour: 16, minute: 0, doctor: 1, patient: 0, status: AppointmentStatus.SCHEDULED, reason: 'Vaccination' },
+    { day: day1, hour: 12, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.SCHEDULED, reason: 'Skin check' },
+    { day: day1, hour: 13, minute: 0, doctor: 1, patient: 2, status: AppointmentStatus.CONFIRMED, reason: 'Follow-up' },
+    { day: day1, hour: 15, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.CANCELLED, reason: 'Rescheduled by patient' },
+    { day: day2, hour: 11, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.SCHEDULED, reason: 'Consultation' },
+    { day: day2, hour: 13, minute: 0, doctor: 0, patient: 2, status: AppointmentStatus.CONFIRMED, reason: 'Blood pressure review' },
+    { day: day3, hour: 10, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.SCHEDULED, reason: 'New patient intake' },
+    { day: day3, hour: 15, minute: 0, doctor: 1, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Follow-up' },
   ];
 
   for (const item of plan) {
