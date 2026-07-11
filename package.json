@@ -6,5 +6,11 @@
     "build": "pnpm -r build",
     "predev": "pnpm --filter @clinic/shared build",
     "dev": "pnpm -r --parallel --if-present dev"
+  },
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": ["current", "linux"],
+      "cpu": ["current", "x64", "arm64"]
+    }
   }
 }
