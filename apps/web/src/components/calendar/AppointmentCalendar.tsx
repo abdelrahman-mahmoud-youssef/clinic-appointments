@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AppointmentStatus, isWithinWorkingHours } from '@clinic/shared';
+import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, startOfDay, endOfDay, getDay, set } from 'date-fns';
@@ -11,7 +11,7 @@ import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
-import { getDoctorAvailability } from '@/lib/api/doctors';
+import { getDoctorAvailability, listDoctors } from '@/lib/api/doctors';
 import { getClinicSettings } from '@/lib/api/clinic';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { RoleGate } from '@/components/auth/RoleGate';
@@ -56,6 +56,7 @@ interface CalendarEvent {
   title: string;
   start: Date;
   end: Date;
+  resourceId: string;
   resource: Appointment;
 }
 
@@ -135,6 +136,19 @@ export function AppointmentCalendar() {
     queryFn: getClinicSettings,
   });
 
+  const { data: doctors = [] } = useQuery({
+    queryKey: ['doctors'],
+    queryFn: listDoctors,
+    enabled: role !== Role.DOCTOR,
+  });
+
+  const resources = useMemo(
+    () => doctors.map((doctor) => ({ id: doctor.id, title: doctor.name })),
+    [doctors],
+  );
+  const showResources =
+    view === Views.DAY && !doctorFilter && role !== Role.DOCTOR && resources.length > 1;
+
   const dayStartHour = clinicSettings?.dayStartHour ?? DEFAULT_DAY_START_HOUR;
   const dayEndHour = clinicSettings?.dayEndHour ?? DEFAULT_DAY_END_HOUR;
   const minTime = useMemo(() => hourToTime(dayStartHour), [dayStartHour]);
@@ -147,6 +161,7 @@ export function AppointmentCalendar() {
         title: appointment.reason || 'Appointment',
         start: new Date(appointment.startsAt),
         end: new Date(appointment.endsAt),
+        resourceId: appointment.doctorId,
         resource: appointment,
       })),
     [appointments],
@@ -263,6 +278,9 @@ export function AppointmentCalendar() {
           view={view}
           onView={(nextView) => setView(nextView)}
           views={CALENDAR_VIEWS}
+          resources={showResources ? resources : undefined}
+          resourceIdAccessor={(resource) => (resource as { id: string }).id}
+          resourceTitleAccessor={(resource) => (resource as { title: string }).title}
           step={SLOT_STEP_MINUTES}
           timeslots={1}
           min={minTime}
