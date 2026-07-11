@@ -7,7 +7,6 @@ import { Role } from '@clinic/shared';
 import { useRequireAuth } from '@/lib/auth/useRequireAuth';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { listUsers, createUser } from '@/lib/api/users';
-import { listDoctors } from '@/lib/api/doctors';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { AppShell } from '@/components/layout/AppShell';
 import { Field, Input, Select } from '@/components/ui/FormControls';
@@ -36,7 +35,7 @@ export default function StaffPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newRole, setNewRole] = useState<Role>(Role.RECEPTIONIST);
-  const [doctorId, setDoctorId] = useState('');
+  const [doctorName, setDoctorName] = useState('');
 
   useEffect(() => {
     if (isReady && role && role !== Role.ADMIN) router.replace('/dashboard');
@@ -44,10 +43,6 @@ export default function StaffPage() {
 
   const enabled = isReady && role === Role.ADMIN;
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled });
-  const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: listDoctors, enabled });
-
-  const linkedDoctorIds = new Set(users.map((user) => user.doctorId).filter(Boolean));
-  const availableDoctors = doctors.filter((doctor) => !linkedDoctorIds.has(doctor.id));
 
   const create = useMutation({
     mutationFn: () =>
@@ -55,13 +50,14 @@ export default function StaffPage() {
         email: email.trim(),
         password,
         role: newRole,
-        doctorId: newRole === Role.DOCTOR && doctorId ? doctorId : undefined,
+        doctorName: newRole === Role.DOCTOR ? doctorName.trim() : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['doctors'] });
       setEmail('');
       setPassword('');
-      setDoctorId('');
+      setDoctorName('');
     },
   });
 
@@ -118,20 +114,14 @@ export default function StaffPage() {
             </Select>
           </Field>
           {newRole === Role.DOCTOR && (
-            <Field label="Doctor">
-              <Select value={doctorId} onChange={(event) => setDoctorId(event.target.value)}>
-                <option value="">Not linked</option>
-                {availableDoctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    {doctor.name}
-                  </option>
-                ))}
-              </Select>
-              {availableDoctors.length === 0 && (
-                <span className="text-xs font-normal text-ink-faint">
-                  Every doctor already has an account. Add a doctor on the Doctors page first.
-                </span>
-              )}
+            <Field label="Doctor name">
+              <Input
+                value={doctorName}
+                onChange={(event) => setDoctorName(event.target.value)}
+                placeholder="Dr. Jane Smith"
+                minLength={2}
+                required
+              />
             </Field>
           )}
           {create.isError && (

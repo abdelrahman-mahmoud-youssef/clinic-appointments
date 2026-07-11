@@ -13,7 +13,7 @@ export interface CreateUserInput {
   email: string;
   password: string;
   role: Role;
-  doctorId?: string;
+  doctorName?: string;
 }
 
 export function listUsers(): Promise<StaffUser[]> {
