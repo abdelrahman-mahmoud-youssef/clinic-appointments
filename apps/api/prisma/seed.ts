@@ -1,10 +1,109 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { AppointmentStatus, Doctor, Patient, PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 const SEED_PASSWORD = 'Password123!';
+const WEEKDAYS = [1, 2, 3, 4, 5];
 
-const WEEKDAYS_MON_FRI = [1, 2, 3, 4, 5];
+interface DoctorSeed {
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
+interface ClinicSeed {
+  name: string;
+  slug: string;
+  timezone: string;
+  dayStartHour: number;
+  dayEndHour: number;
+  doctors: DoctorSeed[];
+  patients: string[];
+}
+
+const CLINICS: ClinicSeed[] = [
+  {
+    name: 'Sunrise Clinic',
+    slug: 'sunrise-clinic',
+    timezone: 'America/New_York',
+    dayStartHour: 8,
+    dayEndHour: 18,
+    doctors: [
+      { name: 'Dr. Alice Chen', startTime: '09:00', endTime: '17:00' },
+      { name: 'Dr. Bob Martinez', startTime: '08:00', endTime: '14:00' },
+    ],
+    patients: ['John Doe', 'Jane Roe', 'Sam Patel', 'Maria Garcia'],
+  },
+  {
+    name: 'Downtown Clinic',
+    slug: 'downtown-clinic',
+    timezone: 'Europe/London',
+    dayStartHour: 9,
+    dayEndHour: 17,
+    doctors: [
+      { name: 'Dr. Carol Ahmed', startTime: '09:00', endTime: '16:00' },
+      { name: 'Dr. David Okafor', startTime: '10:00', endTime: '17:00' },
+    ],
+    patients: ['Emma Wilson', 'Liam Brown', 'Olivia Jones'],
+  },
+];
+
+function upcomingWeekday(index: number): Date {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  let found = 0;
+  for (let step = 0; step < 21; step += 1) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const day = date.getUTCDay();
+    if (day >= 1 && day <= 5) {
+      if (found === index) return new Date(date);
+      found += 1;
+    }
+  }
+  return date;
+}
+
+function slotAt(day: Date, hour: number, minute: number): { startsAt: Date; endsAt: Date } {
+  const startsAt = new Date(day);
+  startsAt.setUTCHours(hour, minute, 0, 0);
+  const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
+  return { startsAt, endsAt };
+}
+
+async function seedAppointments(
+  clinicId: string,
+  doctors: Doctor[],
+  patients: Patient[],
+  createdBy: string,
+): Promise<void> {
+  const dayOne = upcomingWeekday(0);
+  const dayTwo = upcomingWeekday(1);
+
+  const plan = [
+    { day: dayOne, hour: 12, minute: 0, doctor: 0, patient: 0, status: AppointmentStatus.SCHEDULED, reason: 'Annual check-up' },
+    { day: dayOne, hour: 12, minute: 0, doctor: 1, patient: 1, status: AppointmentStatus.CONFIRMED, reason: 'Consultation' },
+    { day: dayOne, hour: 13, minute: 30, doctor: 0, patient: 2, status: AppointmentStatus.SCHEDULED, reason: 'Follow-up' },
+    { day: dayTwo, hour: 12, minute: 30, doctor: 1, patient: 0, status: AppointmentStatus.CONFIRMED, reason: 'Blood test review' },
+    { day: dayTwo, hour: 14, minute: 0, doctor: 0, patient: 1, status: AppointmentStatus.CANCELLED, reason: 'Rescheduled by patient' },
+  ];
+
+  for (const item of plan) {
+    const { startsAt, endsAt } = slotAt(item.day, item.hour, item.minute);
+    await prisma.appointment.create({
+      data: {
+        clinicId,
+        doctorId: doctors[item.doctor].id,
+        patientId: patients[item.patient].id,
+        startsAt,
+        endsAt,
+        status: item.status,
+        reason: item.reason,
+        createdBy,
+        updatedBy: createdBy,
+      },
+    });
+  }
+}
 
 async function main() {
   await prisma.appointment.deleteMany();
@@ -15,64 +114,67 @@ async function main() {
   await prisma.clinic.deleteMany();
 
   const hashedPassword = await bcrypt.hash(SEED_PASSWORD, 10);
-
-  const clinics = await Promise.all([
-    prisma.clinic.create({ data: { name: 'Sunrise Clinic', timezone: 'America/New_York' } }),
-    prisma.clinic.create({ data: { name: 'Downtown Clinic', timezone: 'Europe/London' } }),
-  ]);
-
   const credentials: Array<{ clinic: string; role: string; email: string; password: string }> = [];
 
-  for (const clinic of clinics) {
-    const slug = clinic.name.toLowerCase().replace(/\s+/g, '-');
-
-    const [doctorLinked, doctorExtra] = await Promise.all([
-      prisma.doctor.create({ data: { clinicId: clinic.id, name: `Dr. Alice (${clinic.name})` } }),
-      prisma.doctor.create({ data: { clinicId: clinic.id, name: `Dr. Bob (${clinic.name})` } }),
-    ]);
-
-    // Dr. Alice works a split shift (morning + afternoon, closed for lunch).
-    // Dr. Bob works a single block. Both Mon-Fri, demonstrating the two shapes.
-    await prisma.doctorAvailability.createMany({
-      data: WEEKDAYS_MON_FRI.flatMap((weekday) => [
-        { clinicId: clinic.id, doctorId: doctorLinked.id, weekday, startTime: '09:00', endTime: '12:00' },
-        { clinicId: clinic.id, doctorId: doctorLinked.id, weekday, startTime: '13:00', endTime: '17:00' },
-        { clinicId: clinic.id, doctorId: doctorExtra.id, weekday, startTime: '09:00', endTime: '17:00' },
-      ]),
+  for (const seed of CLINICS) {
+    const clinic = await prisma.clinic.create({
+      data: {
+        name: seed.name,
+        timezone: seed.timezone,
+        dayStartHour: seed.dayStartHour,
+        dayEndHour: seed.dayEndHour,
+      },
     });
 
-    await Promise.all([
-      prisma.patient.create({ data: { clinicId: clinic.id, name: `Patient One (${clinic.name})` } }),
-      prisma.patient.create({ data: { clinicId: clinic.id, name: `Patient Two (${clinic.name})` } }),
-    ]);
+    const doctors: Doctor[] = [];
+    for (const doctorSeed of seed.doctors) {
+      const doctor = await prisma.doctor.create({
+        data: { clinicId: clinic.id, name: doctorSeed.name },
+      });
+      await prisma.doctorAvailability.createMany({
+        data: WEEKDAYS.map((weekday) => ({
+          clinicId: clinic.id,
+          doctorId: doctor.id,
+          weekday,
+          startTime: doctorSeed.startTime,
+          endTime: doctorSeed.endTime,
+        })),
+      });
+      doctors.push(doctor);
+    }
 
-    const [admin, receptionist, doctorUser] = await Promise.all([
-      prisma.user.create({
-        data: { clinicId: clinic.id, email: `admin@${slug}.test`, hashedPassword, role: Role.ADMIN },
-      }),
-      prisma.user.create({
-        data: {
-          clinicId: clinic.id,
-          email: `receptionist@${slug}.test`,
-          hashedPassword,
-          role: Role.RECEPTIONIST,
-        },
-      }),
-      prisma.user.create({
-        data: {
-          clinicId: clinic.id,
-          email: `doctor@${slug}.test`,
-          hashedPassword,
-          role: Role.DOCTOR,
-          doctorId: doctorLinked.id,
-        },
-      }),
-    ]);
+    const patients: Patient[] = [];
+    for (const name of seed.patients) {
+      patients.push(await prisma.patient.create({ data: { clinicId: clinic.id, name } }));
+    }
+
+    const admin = await prisma.user.create({
+      data: { clinicId: clinic.id, email: `admin@${seed.slug}.test`, hashedPassword, role: Role.ADMIN },
+    });
+    const receptionist = await prisma.user.create({
+      data: {
+        clinicId: clinic.id,
+        email: `receptionist@${seed.slug}.test`,
+        hashedPassword,
+        role: Role.RECEPTIONIST,
+      },
+    });
+    const doctorUser = await prisma.user.create({
+      data: {
+        clinicId: clinic.id,
+        email: `doctor@${seed.slug}.test`,
+        hashedPassword,
+        role: Role.DOCTOR,
+        doctorId: doctors[0].id,
+      },
+    });
+
+    await seedAppointments(clinic.id, doctors, patients, admin.id);
 
     credentials.push(
-      { clinic: clinic.name, role: 'ADMIN', email: admin.email, password: SEED_PASSWORD },
-      { clinic: clinic.name, role: 'RECEPTIONIST', email: receptionist.email, password: SEED_PASSWORD },
-      { clinic: clinic.name, role: 'DOCTOR', email: doctorUser.email, password: SEED_PASSWORD },
+      { clinic: seed.name, role: 'ADMIN', email: admin.email, password: SEED_PASSWORD },
+      { clinic: seed.name, role: 'RECEPTIONIST', email: receptionist.email, password: SEED_PASSWORD },
+      { clinic: seed.name, role: 'DOCTOR', email: doctorUser.email, password: SEED_PASSWORD },
     );
   }
 
