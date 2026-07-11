@@ -10,6 +10,6 @@ import { DoctorsService } from './doctors.service';
   imports: [ClinicsModule],
   controllers: [DoctorsController],
   providers: [AvailabilityService, AvailabilityRepository, DoctorsService, DoctorsRepository],
-  exports: [AvailabilityService],
+  exports: [AvailabilityService, DoctorsService],
 })
 export class DoctorsModule {}

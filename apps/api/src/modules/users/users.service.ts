@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Role } from '@clinic/shared';
 import * as bcrypt from 'bcrypt';
-import { CrossTenantAccessError } from '../../shared/errors/domain-errors';
+import { DoctorsService } from '../doctors/doctors.service';
 import { UsersRepository } from './users.repository';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -9,7 +9,10 @@ const BCRYPT_ROUNDS = 10;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    private readonly doctorsService: DoctorsService,
+  ) {}
 
   list(clinicId: string) {
     return this.usersRepository.findAllByClinic(clinicId);
@@ -20,14 +23,10 @@ export class UsersService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    const doctorId = dto.role === Role.DOCTOR ? dto.doctorId : undefined;
-    if (doctorId) {
-      if (!(await this.usersRepository.doctorInClinic(doctorId, clinicId))) {
-        throw new CrossTenantAccessError(`Doctor ${doctorId} not found in this clinic`);
-      }
-      if (await this.usersRepository.doctorLinked(doctorId)) {
-        throw new ConflictException('This doctor is already linked to a user account');
-      }
+    let doctorId: string | undefined;
+    if (dto.role === Role.DOCTOR && dto.doctorName) {
+      const doctor = await this.doctorsService.create(clinicId, dto.doctorName.trim());
+      doctorId = doctor.id;
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);

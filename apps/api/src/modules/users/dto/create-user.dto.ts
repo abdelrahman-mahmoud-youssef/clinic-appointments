@@ -1,5 +1,5 @@
 import { Role } from '@clinic/shared';
-import { IsEmail, IsEnum, IsOptional, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
@@ -11,7 +11,9 @@ export class CreateUserDto {
   @IsEnum(Role)
   role!: Role;
 
-  @IsOptional()
-  @IsUUID()
-  doctorId?: string;
+  @ValidateIf((dto) => dto.role === Role.DOCTOR)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  doctorName?: string;
 }
