@@ -89,7 +89,9 @@ export function AppointmentCalendar() {
   const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [date, setDate] = useState<Date>(() => new Date());
   const [view, setView] = useState<View>(Views.DAY);
-  const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date } | null>(null);
+  const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date; doctorId?: string } | null>(
+    null,
+  );
   const [pendingMove, setPendingMove] = useState<{ event: CalendarEvent; start: Date; end: Date } | null>(
     null,
   );
@@ -210,10 +212,12 @@ export function AppointmentCalendar() {
         return;
       }
       setClosedSlotNotice(null);
-      setPendingSlot({ start: slotInfo.start, end: slotInfo.end });
+      const doctorId =
+        slotInfo.resourceId != null ? String(slotInfo.resourceId) : doctorFilter;
+      setPendingSlot({ start: slotInfo.start, end: slotInfo.end, doctorId });
       setIsCreating(true);
     },
-    [isSlotClosed],
+    [isSlotClosed, doctorFilter],
   );
 
   const handleEventDrop = useCallback(
@@ -305,6 +309,7 @@ export function AppointmentCalendar() {
         <AppointmentFormModal
           defaultStart={pendingSlot?.start}
           defaultEnd={pendingSlot?.end}
+          defaultDoctorId={pendingSlot?.doctorId}
           onClose={() => setIsCreating(false)}
         />
       )}

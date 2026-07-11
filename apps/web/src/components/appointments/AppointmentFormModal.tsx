@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   defaultStart?: Date;
   defaultEnd?: Date;
+  defaultDoctorId?: string;
   appointment?: Appointment;
 }
 
@@ -28,7 +29,13 @@ function defaultRange(): { start: Date; end: Date } {
   return { start, end };
 }
 
-export function AppointmentFormModal({ onClose, defaultStart, defaultEnd, appointment }: Props) {
+export function AppointmentFormModal({
+  onClose,
+  defaultStart,
+  defaultEnd,
+  defaultDoctorId,
+  appointment,
+}: Props) {
   const queryClient = useQueryClient();
   const fallback = defaultRange();
   const editing = !!appointment;
@@ -37,7 +44,7 @@ export function AppointmentFormModal({ onClose, defaultStart, defaultEnd, appoin
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: listPatients });
 
   const [patientId, setPatientId] = useState(appointment?.patientId ?? '');
-  const [doctorId, setDoctorId] = useState(appointment?.doctorId ?? '');
+  const [doctorId, setDoctorId] = useState(appointment?.doctorId ?? defaultDoctorId ?? '');
   const [startsAt, setStartsAt] = useState(
     toDateTimeLocalValue(appointment ? new Date(appointment.startsAt) : defaultStart ?? fallback.start),
   );
