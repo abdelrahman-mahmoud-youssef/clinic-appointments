@@ -271,6 +271,56 @@ describe('Appointments integration (real Postgres)', () => {
     ).rejects.toThrow(OverlappingAppointmentError);
   });
 
+  it('searches appointments by patient name, case-insensitively and clinic-scoped', async () => {
+    await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-09-01T09:00:00Z'),
+      endsAt: new Date('2030-09-01T09:30:00Z'),
+      actorUserId: 'tester',
+    });
+    await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorB.id,
+      patientId: patientB.id,
+      startsAt: new Date('2030-09-01T09:00:00Z'),
+      endsAt: new Date('2030-09-01T09:30:00Z'),
+      actorUserId: 'tester',
+    });
+
+    const results = await service.list({ clinicId: clinicA.id, actorRole: Role.ADMIN, q: 'patient a' });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].patientId).toBe(patientA.id);
+  });
+
+  it('searches appointments by reason, case-insensitively', async () => {
+    await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-10-01T09:00:00Z'),
+      endsAt: new Date('2030-10-01T09:30:00Z'),
+      reason: 'Root canal',
+      actorUserId: 'tester',
+    });
+    await service.create({
+      clinicId: clinicA.id,
+      doctorId: doctorA.id,
+      patientId: patientA.id,
+      startsAt: new Date('2030-10-01T11:00:00Z'),
+      endsAt: new Date('2030-10-01T11:30:00Z'),
+      reason: 'Annual physical',
+      actorUserId: 'tester',
+    });
+
+    const results = await service.list({ clinicId: clinicA.id, actorRole: Role.ADMIN, q: 'ROOT' });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].reason).toBe('Root canal');
+  });
+
   it('rejects editing a terminal appointment', async () => {
     const appointment = await service.create({
       clinicId: clinicA.id,

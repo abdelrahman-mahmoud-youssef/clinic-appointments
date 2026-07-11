@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
@@ -20,6 +20,7 @@ import { AppointmentFormModal } from '@/components/appointments/AppointmentFormM
 import { AppointmentDetailsModal } from '@/components/appointments/AppointmentDetailsModal';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
 import { useMoveAppointment } from '@/lib/query/useMoveAppointment';
+import { useSetFilter } from '@/lib/query/useSetFilter';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { Banner } from '@/components/ui/Banner';
 import { Button } from '@/components/ui/Button';
@@ -83,9 +84,8 @@ function computeInitialRange(): DateRange {
 }
 
 export function AppointmentCalendar() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const setFilter = useSetFilter();
 
   const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [view, setView] = useState<View>(Views.DAY);
@@ -108,31 +108,29 @@ export function AppointmentCalendar() {
 
   const doctorFilter = searchParams.get('doctorId') || undefined;
   const statusFilter = (searchParams.get('status') as AppointmentStatus | null) || undefined;
+  const searchTerm = searchParams.get('q') || undefined;
   const dateParam = searchParams.get('date');
   const date = useMemo(
     () => (dateParam ? new Date(`${dateParam}T00:00:00`) : new Date()),
     [dateParam],
   );
 
-  const setFilter = useCallback(
-    (key: string, value: string | undefined) => {
-      const next = new URLSearchParams(searchParams.toString());
-      if (value) next.set(key, value);
-      else next.delete(key);
-      const query = next.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams],
-  );
-
   const { data: appointments = [] } = useQuery({
-    queryKey: ['appointments', range.from.toISOString(), range.to.toISOString(), doctorFilter, statusFilter],
+    queryKey: [
+      'appointments',
+      range.from.toISOString(),
+      range.to.toISOString(),
+      doctorFilter,
+      statusFilter,
+      searchTerm,
+    ],
     queryFn: () =>
       listAppointments({
         from: range.from.toISOString(),
         to: range.to.toISOString(),
         doctorId: doctorFilter,
         status: statusFilter,
+        q: searchTerm,
       }),
   });
 
@@ -275,6 +273,8 @@ export function AppointmentCalendar() {
           onDoctorIdChange={(value) => setFilter('doctorId', value)}
           status={statusFilter}
           onStatusChange={(value) => setFilter('status', value)}
+          q={searchTerm ?? ''}
+          onQChange={(value) => setFilter('q', value)}
         />
         <RoleGate roles={CAN_BOOK}>
           <Button

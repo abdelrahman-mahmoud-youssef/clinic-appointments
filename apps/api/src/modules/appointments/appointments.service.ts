@@ -60,6 +60,7 @@ interface ListFilters {
   from?: Date;
   to?: Date;
   status?: AppointmentStatus;
+  q?: string;
 }
 
 interface RepositoryListFilters {
@@ -68,6 +69,7 @@ interface RepositoryListFilters {
   from?: Date;
   to?: Date;
   status?: AppointmentStatus;
+  q?: string;
 }
 
 export interface DayBucket {

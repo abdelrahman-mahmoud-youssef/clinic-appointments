@@ -33,6 +33,7 @@ interface ListQuery {
   from?: Date;
   to?: Date;
   status?: AppointmentStatus;
+  q?: string;
 }
 
 @Injectable()
@@ -98,6 +99,12 @@ export class AppointmentsRepository {
         status: query.status,
         startsAt: query.from ? { gte: query.from } : undefined,
         endsAt: query.to ? { lte: query.to } : undefined,
+        OR: query.q
+          ? [
+              { reason: { contains: query.q, mode: 'insensitive' } },
+              { patient: { name: { contains: query.q, mode: 'insensitive' } } },
+            ]
+          : undefined,
       },
       orderBy: { startsAt: 'asc' },
     });

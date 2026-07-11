@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, Role } from '@clinic/shared';
 import { format } from 'date-fns';
@@ -10,9 +10,11 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { listAppointments } from '@/lib/api/appointments';
 import { listDoctors } from '@/lib/api/doctors';
 import { useDirectory } from '@/lib/query/useDirectory';
+import { useSetFilter } from '@/lib/query/useSetFilter';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatusBadge } from '@/components/calendar/StatusBadge';
 import { Field, Select, Input } from '@/components/ui/FormControls';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { STATUS_LABELS } from '@/components/calendar/statusColors';
 
 function toStart(date: string): string | undefined {
@@ -28,21 +30,14 @@ function AppointmentsListInner() {
   const { role } = useAuth();
   const { doctorName, patientName } = useDirectory();
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const setFilter = useSetFilter();
 
   const doctorId = searchParams.get('doctorId') ?? '';
   const status = searchParams.get('status') ?? '';
   const from = searchParams.get('from') ?? '';
   const to = searchParams.get('to') ?? '';
-
-  function setFilter(key: string, value: string) {
-    const next = new URLSearchParams(searchParams.toString());
-    if (value) next.set(key, value);
-    else next.delete(key);
-    const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }
+  const q = searchParams.get('q') ?? '';
 
   const showDoctorFilter = role !== Role.DOCTOR;
   const { data: doctors = [] } = useQuery({
@@ -52,13 +47,14 @@ function AppointmentsListInner() {
   });
 
   const { data: appointments = [], isLoading } = useQuery({
-    queryKey: ['appointments', 'list', doctorId, status, from, to],
+    queryKey: ['appointments', 'list', doctorId, status, from, to, q],
     queryFn: () =>
       listAppointments({
         doctorId: doctorId || undefined,
         status: (status || undefined) as AppointmentStatus | undefined,
         from: toStart(from),
         to: toEnd(to),
+        q: q || undefined,
       }),
     enabled: isReady,
   });
@@ -77,6 +73,13 @@ function AppointmentsListInner() {
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+        <Field label="Search" className="mb-0 sm:w-56">
+          <SearchInput
+            value={q}
+            onChange={(value) => setFilter('q', value || undefined)}
+            placeholder="Patient or reason"
+          />
+        </Field>
         {showDoctorFilter && (
           <Field label="Doctor" className="mb-0 sm:w-48">
             <Select value={doctorId} onChange={(event) => setFilter('doctorId', event.target.value)}>
