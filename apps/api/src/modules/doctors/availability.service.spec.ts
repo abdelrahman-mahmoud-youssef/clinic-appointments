@@ -1,7 +1,12 @@
 import { AvailabilityService } from './availability.service';
+import { CrossTenantAccessError } from '../../shared/errors/domain-errors';
 
 function createRepositoryMock() {
-  return { findByDoctor: jest.fn() };
+  return {
+    findByDoctor: jest.fn(),
+    doctorInClinic: jest.fn().mockResolvedValue(true),
+    replaceForDoctor: jest.fn().mockResolvedValue(undefined),
+  };
 }
 
 function createRedisMock() {
@@ -9,7 +14,15 @@ function createRedisMock() {
 }
 
 function createClinicsServiceMock() {
-  return { getTimezone: jest.fn().mockResolvedValue('UTC') };
+  return {
+    getTimezone: jest.fn().mockResolvedValue('UTC'),
+    getSettings: jest.fn().mockResolvedValue({
+      name: 'Test',
+      timezone: 'UTC',
+      dayStartHour: 9,
+      dayEndHour: 17,
+    }),
+  };
 }
 
 // 2027-01-04 is a Monday (UTC weekday 1).
@@ -104,6 +117,58 @@ describe('AvailabilityService', () => {
       await service.invalidateCache('clinic-1', 'doctor-1');
 
       expect(redis.del).toHaveBeenCalledWith('availability:clinic-1:doctor-1');
+    });
+  });
+
+  describe('setWorkingHours', () => {
+    it('replaces the windows and invalidates the cache when valid', async () => {
+      repo.findByDoctor.mockResolvedValue([{ weekday: 1, startTime: '10:00', endTime: '16:00' }]);
+
+      await service.setWorkingHours('clinic-1', 'doctor-1', [
+        { weekday: 1, startTime: '10:00', endTime: '16:00' },
+      ]);
+
+      expect(repo.replaceForDoctor).toHaveBeenCalledWith('clinic-1', 'doctor-1', [
+        { weekday: 1, startTime: '10:00', endTime: '16:00' },
+      ]);
+      expect(redis.del).toHaveBeenCalledWith('availability:clinic-1:doctor-1');
+    });
+
+    it('rejects hours outside the clinic window', async () => {
+      await expect(
+        service.setWorkingHours('clinic-1', 'doctor-1', [
+          { weekday: 1, startTime: '08:00', endTime: '16:00' },
+        ]),
+      ).rejects.toThrow(/clinic window/);
+      expect(repo.replaceForDoctor).not.toHaveBeenCalled();
+    });
+
+    it('rejects a window whose end is not after its start', async () => {
+      await expect(
+        service.setWorkingHours('clinic-1', 'doctor-1', [
+          { weekday: 1, startTime: '14:00', endTime: '14:00' },
+        ]),
+      ).rejects.toThrow(/after opening/);
+    });
+
+    it('rejects more than one shift on the same day', async () => {
+      await expect(
+        service.setWorkingHours('clinic-1', 'doctor-1', [
+          { weekday: 1, startTime: '09:00', endTime: '12:00' },
+          { weekday: 1, startTime: '13:00', endTime: '16:00' },
+        ]),
+      ).rejects.toThrow(/one shift per day/);
+    });
+
+    it('rejects a doctor from another clinic', async () => {
+      repo.doctorInClinic.mockResolvedValue(false);
+
+      await expect(
+        service.setWorkingHours('clinic-1', 'doctor-x', [
+          { weekday: 1, startTime: '10:00', endTime: '16:00' },
+        ]),
+      ).rejects.toThrow(CrossTenantAccessError);
+      expect(repo.replaceForDoctor).not.toHaveBeenCalled();
     });
   });
 });
