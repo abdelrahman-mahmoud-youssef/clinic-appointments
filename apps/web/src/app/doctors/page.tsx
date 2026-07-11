@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Role } from '@clinic/shared';
@@ -9,8 +9,10 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { listDoctors, getDoctorAvailability, Doctor } from '@/lib/api/doctors';
 import { formatWeeklyHours } from '@/lib/doctorHours';
 import { AppShell } from '@/components/layout/AppShell';
+import { Button } from '@/components/ui/Button';
+import { DoctorHoursModal } from '@/components/doctors/DoctorHoursModal';
 
-function DoctorRow({ doctor }: { doctor: Doctor }) {
+function DoctorRow({ doctor, onEdit }: { doctor: Doctor; onEdit: () => void }) {
   const { data: windows = [], isLoading } = useQuery({
     queryKey: ['doctor-availability', doctor.id],
     queryFn: () => getDoctorAvailability(doctor.id),
@@ -22,7 +24,7 @@ function DoctorRow({ doctor }: { doctor: Doctor }) {
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-soft font-display text-xs font-semibold text-brand">
         {doctor.name.replace(/^Dr\.?\s*/i, '').charAt(0).toUpperCase()}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-sm text-ink">{doctor.name}</p>
         <div className="mt-1 flex flex-col gap-0.5 text-xs text-ink-soft sm:flex-row sm:flex-wrap sm:gap-x-5">
           {isLoading ? (
@@ -39,6 +41,9 @@ function DoctorRow({ doctor }: { doctor: Doctor }) {
           )}
         </div>
       </div>
+      <Button variant="secondary" className="shrink-0" onClick={onEdit}>
+        Edit hours
+      </Button>
     </li>
   );
 }
@@ -51,6 +56,8 @@ export default function DoctorsPage() {
   useEffect(() => {
     if (isReady && role && role !== Role.ADMIN) router.replace('/dashboard');
   }, [isReady, role, router]);
+
+  const [editing, setEditing] = useState<Doctor | null>(null);
 
   const { data: doctors = [] } = useQuery({
     queryKey: ['doctors'],
@@ -79,11 +86,13 @@ export default function DoctorsPage() {
         ) : (
           <ul className="divide-y divide-line">
             {doctors.map((doctor) => (
-              <DoctorRow key={doctor.id} doctor={doctor} />
+              <DoctorRow key={doctor.id} doctor={doctor} onEdit={() => setEditing(doctor)} />
             ))}
           </ul>
         )}
       </div>
+
+      {editing && <DoctorHoursModal doctor={editing} onClose={() => setEditing(null)} />}
     </AppShell>
   );
 }
