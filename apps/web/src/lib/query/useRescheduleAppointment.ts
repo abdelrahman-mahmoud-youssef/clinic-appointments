@@ -21,11 +21,13 @@ export function useRescheduleAppointment() {
       const previousQueries = queryClient.getQueriesData<Appointment[]>({ queryKey: ['appointments'] });
 
       queryClient.setQueriesData<Appointment[]>({ queryKey: ['appointments'] }, (old) =>
-        old?.map((appointment) =>
-          appointment.id === input.id
-            ? { ...appointment, startsAt: input.startsAt, endsAt: input.endsAt }
-            : appointment,
-        ),
+        Array.isArray(old)
+          ? old.map((appointment) =>
+              appointment.id === input.id
+                ? { ...appointment, startsAt: input.startsAt, endsAt: input.endsAt }
+                : appointment,
+            )
+          : old,
       );
 
       return { previousQueries };

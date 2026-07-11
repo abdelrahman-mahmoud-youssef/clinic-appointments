@@ -23,7 +23,10 @@ export interface ListAppointmentsParams {
   doctorId?: string;
   status?: AppointmentStatus;
   q?: string;
+  limit?: number;
+  cursor?: string;
 }
+
 
 export function getAppointment(id: string): Promise<Appointment> {
   return apiFetch(`/appointments/${id}`);
@@ -36,6 +39,8 @@ export function listAppointments(params: ListAppointmentsParams = {}): Promise<A
   if (params.doctorId) query.set('doctorId', params.doctorId);
   if (params.status) query.set('status', params.status);
   if (params.q) query.set('q', params.q);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.cursor) query.set('cursor', params.cursor);
   const suffix = query.toString();
   return apiFetch(`/appointments${suffix ? `?${suffix}` : ''}`);
 }

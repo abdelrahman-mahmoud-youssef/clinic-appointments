@@ -354,6 +354,53 @@ describe('Appointments integration (real Postgres)', () => {
     );
   });
 
+  it('paginates the list with a stable cursor', async () => {
+    const pager = await prisma.doctor.create({ data: { clinicId: clinicA.id, name: 'Pager Doctor' } });
+    await prisma.doctorAvailability.createMany({
+      data: ALL_WEEKDAYS.map((weekday) => ({
+        clinicId: clinicA.id,
+        doctorId: pager.id,
+        weekday,
+        startTime: '00:00',
+        endTime: '23:59',
+      })),
+    });
+    const base = '2030-12-01T';
+    for (const hour of ['09', '10', '11']) {
+      await service.create({
+        clinicId: clinicA.id,
+        doctorId: pager.id,
+        patientId: patientA.id,
+        startsAt: new Date(`${base}${hour}:00:00Z`),
+        endsAt: new Date(`${base}${hour}:30:00Z`),
+        actorUserId: 'tester',
+      });
+    }
+
+    const page1 = await service.list({
+      clinicId: clinicA.id,
+      actorRole: Role.ADMIN,
+      doctorId: pager.id,
+      limit: 2,
+    });
+    const page2 = await service.list({
+      clinicId: clinicA.id,
+      actorRole: Role.ADMIN,
+      doctorId: pager.id,
+      limit: 2,
+      cursor: page1[1].id,
+    });
+
+    expect(page1).toHaveLength(2);
+    expect(page2).toHaveLength(1);
+    expect(new Set([...page1, ...page2].map((a) => a.id)).size).toBe(3);
+    expect([...page1, ...page2].map((a) => a.startsAt.toISOString())).toEqual([
+      `${base}09:00:00.000Z`,
+      `${base}10:00:00.000Z`,
+      `${base}11:00:00.000Z`,
+    ]);
+  });
+
   it('rejects editing a terminal appointment', async () => {
     const appointment = await service.create({
       clinicId: clinicA.id,

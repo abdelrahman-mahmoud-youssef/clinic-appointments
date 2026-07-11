@@ -500,6 +500,34 @@ it would add real surface area for a requirement nobody asked for here.
   the same breakpoint. One `AppointmentCalendar` component serves both
   form factors rather than maintaining a parallel mobile component tree.
 
+## Pagination: cursor-based on the list, none on the calendar
+
+- `GET /appointments` takes optional `limit` + `cursor`. When `limit` is
+  omitted the endpoint returns the full array (the calendar's mode); when
+  present it returns at most `limit` rows ordered by `(startsAt, id)`, with
+  `cursor` being the id of the last row of the previous page. Offset
+  pagination was rejected: an insert (a new booking) between page fetches
+  shifts every later row's offset, so a user paging through would see a row
+  twice or skip one. A cursor anchored to `(startsAt, id)` is stable under
+  concurrent inserts — the next page always resumes exactly after a known
+  row regardless of what was inserted earlier.
+- The response stays a plain `Appointment[]` (no `{items, nextCursor}`
+  envelope). The client infers "there may be more" from `page.length ===
+  limit` and uses the last row's id as the next cursor. Keeping the array
+  shape means the calendar, the dashboard's upcoming list, and the
+  optimistic drag/reschedule cache updates all keep working unchanged. The
+  known cost: when the total is an exact multiple of the page size, the last
+  page is full so the client makes one extra fetch that returns empty. A
+  trivial, well-understood tradeoff versus an envelope that would ripple
+  through every consumer.
+- **The calendar is deliberately not paginated.** It always queries a bounded
+  `from`/`to` window (the visible day/week/month), which is a natural, small
+  limit — a single doctor can't have thousands of appointments in one
+  visible range. Paginating it would break the "show me everything in view"
+  contract the calendar depends on. Only the list/table view, which can span
+  arbitrary date ranges, needs pages (a "Load more" button via
+  `useInfiniteQuery`).
+
 ## Frontend: drag-reschedule is Day-view + pointer only, form is the universal path
 
 - Drag-to-reschedule is enabled only in **Day view** (`draggableAccessor`

@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, Role } from '@clinic/shared';
 import { format } from 'date-fns';
 import { useRequireAuth } from '@/lib/auth/useRequireAuth';
@@ -13,9 +13,12 @@ import { useDirectory } from '@/lib/query/useDirectory';
 import { useSetFilter } from '@/lib/query/useSetFilter';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatusBadge } from '@/components/calendar/StatusBadge';
+import { Button } from '@/components/ui/Button';
 import { Field, Select, Input } from '@/components/ui/FormControls';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { STATUS_LABELS } from '@/components/calendar/statusColors';
+
+const PAGE_SIZE = 25;
 
 function toStart(date: string): string | undefined {
   return date ? new Date(`${date}T00:00:00`).toISOString() : undefined;
@@ -46,18 +49,31 @@ function AppointmentsListInner() {
     enabled: isReady && showDoctorFilter,
   });
 
-  const { data: appointments = [], isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['appointments', 'list', doctorId, status, from, to, q],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       listAppointments({
         doctorId: doctorId || undefined,
         status: (status || undefined) as AppointmentStatus | undefined,
         from: toStart(from),
         to: toEnd(to),
         q: q || undefined,
+        limit: PAGE_SIZE,
+        cursor: pageParam,
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length === PAGE_SIZE ? lastPage[lastPage.length - 1].id : undefined,
     enabled: isReady,
   });
+
+  const appointments = data?.pages.flatMap((page) => page) ?? [];
 
   if (!isReady) {
     return (
@@ -159,6 +175,18 @@ function AppointmentsListInner() {
           </tbody>
         </table>
       </div>
+
+      {hasNextPage && (
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      )}
     </AppShell>
   );
 }

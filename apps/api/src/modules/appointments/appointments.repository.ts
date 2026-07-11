@@ -34,6 +34,8 @@ interface ListQuery {
   to?: Date;
   status?: AppointmentStatus;
   q?: string;
+  limit?: number;
+  cursor?: string;
 }
 
 @Injectable()
@@ -106,7 +108,9 @@ export class AppointmentsRepository {
             ]
           : undefined,
       },
-      orderBy: { startsAt: 'asc' },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      ...(query.limit !== undefined ? { take: query.limit } : {}),
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
   }
 

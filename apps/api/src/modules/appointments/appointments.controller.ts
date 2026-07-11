@@ -105,6 +105,8 @@ export class AppointmentsController {
       to: query.to,
       status: query.status,
       q: query.q,
+      limit: query.limit,
+      cursor: query.cursor,
     });
   }
 

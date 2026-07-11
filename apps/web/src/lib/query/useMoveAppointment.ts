@@ -30,9 +30,11 @@ export function useMoveAppointment() {
       const previousQueries = queryClient.getQueriesData<Appointment[]>({ queryKey: ['appointments'] });
 
       queryClient.setQueriesData<Appointment[]>({ queryKey: ['appointments'] }, (old) =>
-        old?.map((item) =>
-          item.id === appointment.id ? { ...item, doctorId, startsAt, endsAt } : item,
-        ),
+        Array.isArray(old)
+          ? old.map((item) =>
+              item.id === appointment.id ? { ...item, doctorId, startsAt, endsAt } : item,
+            )
+          : old,
       );
 
       return { previousQueries };

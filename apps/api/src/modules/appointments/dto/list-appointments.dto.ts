@@ -1,11 +1,22 @@
 import { AppointmentStatus } from '@clinic/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsDate, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsDate, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 export class ListAppointmentsDto {
   @IsOptional()
   @IsUUID()
   doctorId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
 
   @IsOptional()
   @IsString()
