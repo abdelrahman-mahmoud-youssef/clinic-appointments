@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
@@ -22,7 +22,7 @@ import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { listAppointments, Appointment } from '@/lib/api/appointments';
-import { getDoctorAvailability, listDoctors } from '@/lib/api/doctors';
+import { getDoctorAvailability, listDoctors, WorkingHoursWindow } from '@/lib/api/doctors';
 import { getClinicSettings } from '@/lib/api/clinic';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { RoleGate } from '@/components/auth/RoleGate';
@@ -161,12 +161,6 @@ export function AppointmentCalendar() {
       }),
   });
 
-  const { data: doctorWindows } = useQuery({
-    queryKey: ['doctor-availability', doctorFilter],
-    queryFn: () => getDoctorAvailability(doctorFilter as string),
-    enabled: !!doctorFilter,
-  });
-
   const { data: clinicSettings } = useQuery({
     queryKey: ['clinic-settings'],
     queryFn: getClinicSettings,
@@ -184,6 +178,24 @@ export function AppointmentCalendar() {
   );
   const showResources =
     view === Views.DAY && !doctorFilter && role !== Role.DOCTOR && resources.length > 1;
+
+  const availabilityQueries = useQueries({
+    queries: doctors.map((doctor) => ({
+      queryKey: ['doctor-availability', doctor.id],
+      queryFn: () => getDoctorAvailability(doctor.id),
+      enabled: doctorFilter ? doctor.id === doctorFilter : showResources,
+    })),
+  });
+  const windowsByDoctor = useMemo(() => {
+    const map = new Map<string, WorkingHoursWindow[]>();
+    doctors.forEach((doctor, index) => {
+      const data = availabilityQueries[index]?.data;
+      if (data) {
+        map.set(doctor.id, data);
+      }
+    });
+    return map;
+  }, [doctors, availabilityQueries]);
 
   const doctorName = (id: string) =>
     doctors.find((doctor) => doctor.id === id)?.name ?? 'Unknown doctor';
@@ -207,14 +219,19 @@ export function AppointmentCalendar() {
   );
 
   const isSlotClosed = useCallback(
-    (start: Date) => {
-      if (!doctorFilter || !doctorWindows || !clinicSettings) {
+    (start: Date, resourceId?: string) => {
+      const targetDoctorId = resourceId ?? doctorFilter;
+      if (!targetDoctorId || !clinicSettings) {
+        return false;
+      }
+      const windows = windowsByDoctor.get(targetDoctorId);
+      if (!windows) {
         return false;
       }
       const end = new Date(start.getTime() + SLOT_STEP_MINUTES * 60_000);
-      return !isWithinWorkingHours(doctorWindows, start, end, clinicSettings.timezone);
+      return !isWithinWorkingHours(windows, start, end, clinicSettings.timezone);
     },
-    [doctorFilter, doctorWindows, clinicSettings],
+    [doctorFilter, windowsByDoctor, clinicSettings],
   );
 
   const eventPropGetter = useCallback((event: CalendarEvent) => {
@@ -223,8 +240,11 @@ export function AppointmentCalendar() {
   }, []);
 
   const slotPropGetter = useCallback(
-    (date: Date) =>
-      date.getTime() < Date.now() || isSlotClosed(date) ? { className: 'slot-closed' } : {},
+    (date: Date, resourceId?: string | number) =>
+      date.getTime() < Date.now() ||
+      isSlotClosed(date, resourceId != null ? String(resourceId) : undefined)
+        ? { className: 'slot-closed' }
+        : {},
     [isSlotClosed],
   );
 
@@ -234,15 +254,15 @@ export function AppointmentCalendar() {
         setClosedSlotNotice('That time is in the past. Pick a future slot to book an appointment.');
         return;
       }
-      if (isSlotClosed(slotInfo.start)) {
+      const resourceId = slotInfo.resourceId != null ? String(slotInfo.resourceId) : undefined;
+      if (isSlotClosed(slotInfo.start, resourceId)) {
         setClosedSlotNotice(
-          "This doctor isn't available at that time. Pick an open slot, or clear the doctor filter to book any doctor.",
+          "This doctor isn't available at that time. Pick an open slot in their working hours.",
         );
         return;
       }
       setClosedSlotNotice(null);
-      const doctorId =
-        slotInfo.resourceId != null ? String(slotInfo.resourceId) : doctorFilter;
+      const doctorId = resourceId ?? doctorFilter;
       setPendingSlot({ start: slotInfo.start, end: slotInfo.end, doctorId });
       setIsCreating(true);
     },
