@@ -19,6 +19,7 @@ import { CAN_BOOK } from '@/lib/auth/permissions';
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal';
 import { AppointmentDetailsModal } from '@/components/appointments/AppointmentDetailsModal';
 import { useRescheduleAppointment } from '@/lib/query/useRescheduleAppointment';
+import { useMoveAppointment } from '@/lib/query/useMoveAppointment';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { Banner } from '@/components/ui/Banner';
 import { Button } from '@/components/ui/Button';
@@ -87,23 +88,31 @@ export function AppointmentCalendar() {
   const searchParams = useSearchParams();
 
   const [range, setRange] = useState<DateRange>(computeInitialRange);
-  const [date, setDate] = useState<Date>(() => new Date());
   const [view, setView] = useState<View>(Views.DAY);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date; doctorId?: string } | null>(
     null,
   );
-  const [pendingMove, setPendingMove] = useState<{ event: CalendarEvent; start: Date; end: Date } | null>(
-    null,
-  );
+  const [pendingMove, setPendingMove] = useState<{
+    event: CalendarEvent;
+    start: Date;
+    end: Date;
+    targetDoctorId?: string;
+  } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [closedSlotNotice, setClosedSlotNotice] = useState<string | null>(null);
   const { role } = useAuth();
   const canBook = role ? CAN_BOOK.includes(role) : false;
   const reschedule = useRescheduleAppointment();
+  const move = useMoveAppointment();
 
   const doctorFilter = searchParams.get('doctorId') || undefined;
   const statusFilter = (searchParams.get('status') as AppointmentStatus | null) || undefined;
+  const dateParam = searchParams.get('date');
+  const date = useMemo(
+    () => (dateParam ? new Date(`${dateParam}T00:00:00`) : new Date()),
+    [dateParam],
+  );
 
   const setFilter = useCallback(
     (key: string, value: string | undefined) => {
@@ -150,6 +159,9 @@ export function AppointmentCalendar() {
   );
   const showResources =
     view === Views.DAY && !doctorFilter && role !== Role.DOCTOR && resources.length > 1;
+
+  const doctorName = (id: string) =>
+    doctors.find((doctor) => doctor.id === id)?.name ?? 'Unknown doctor';
 
   const dayStartHour = clinicSettings?.dayStartHour ?? DEFAULT_DAY_START_HOUR;
   const dayEndHour = clinicSettings?.dayEndHour ?? DEFAULT_DAY_END_HOUR;
@@ -221,25 +233,39 @@ export function AppointmentCalendar() {
   );
 
   const handleEventDrop = useCallback(
-    ({ event, start, end }: EventInteractionArgs<CalendarEvent>) => {
-      setPendingMove({ event, start: new Date(start), end: new Date(end) });
+    ({ event, start, end, resourceId }: EventInteractionArgs<CalendarEvent>) => {
+      setPendingMove({
+        event,
+        start: new Date(start),
+        end: new Date(end),
+        targetDoctorId: resourceId != null ? String(resourceId) : undefined,
+      });
     },
     [],
   );
 
   const confirmMove = useCallback(() => {
     if (!pendingMove) return;
-    reschedule.mutate({
-      id: pendingMove.event.id,
-      startsAt: pendingMove.start.toISOString(),
-      endsAt: pendingMove.end.toISOString(),
-    });
+    const { event, start, end, targetDoctorId } = pendingMove;
+    const startsAt = start.toISOString();
+    const endsAt = end.toISOString();
+
+    if (targetDoctorId && targetDoctorId !== event.resource.doctorId) {
+      move.mutate({ appointment: event.resource, doctorId: targetDoctorId, startsAt, endsAt });
+    } else {
+      reschedule.mutate({ id: event.id, startsAt, endsAt });
+    }
     setPendingMove(null);
-  }, [pendingMove, reschedule]);
+  }, [pendingMove, reschedule, move]);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     setSelectedAppointment(event.resource);
   }, []);
+
+  const isDoctorMove =
+    pendingMove != null &&
+    pendingMove.targetDoctorId != null &&
+    pendingMove.targetDoctorId !== pendingMove.event.resource.doctorId;
 
   return (
     <div className="flex flex-col gap-4">
@@ -267,6 +293,9 @@ export function AppointmentCalendar() {
       {reschedule.isError && (
         <Banner onDismiss={() => reschedule.reset()}>{extractErrorMessage(reschedule.error)}</Banner>
       )}
+      {move.isError && (
+        <Banner onDismiss={() => move.reset()}>{extractErrorMessage(move.error)}</Banner>
+      )}
       {closedSlotNotice && <Banner onDismiss={() => setClosedSlotNotice(null)}>{closedSlotNotice}</Banner>}
 
       <div
@@ -278,7 +307,7 @@ export function AppointmentCalendar() {
           localizer={localizer}
           events={events}
           date={date}
-          onNavigate={(nextDate) => setDate(nextDate)}
+          onNavigate={(nextDate) => setFilter('date', format(nextDate, 'yyyy-MM-dd'))}
           view={view}
           onView={(nextView) => setView(nextView)}
           views={CALENDAR_VIEWS}
@@ -320,9 +349,21 @@ export function AppointmentCalendar() {
         />
       )}
       {pendingMove && (
-        <Modal title="Reschedule appointment" onClose={() => setPendingMove(null)}>
+        <Modal
+          title={isDoctorMove ? 'Move appointment' : 'Reschedule appointment'}
+          onClose={() => setPendingMove(null)}
+        >
           <p className="text-sm text-ink-soft">{pendingMove.event.title}</p>
           <dl className="mt-4 space-y-2 text-sm">
+            {isDoctorMove && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-faint">Doctor</dt>
+                <dd className="text-right text-ink">
+                  {doctorName(pendingMove.event.resource.doctorId)} →{' '}
+                  {doctorName(pendingMove.targetDoctorId as string)}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between gap-4">
               <dt className="text-ink-faint">From</dt>
               <dd className="font-data text-ink">{format(pendingMove.event.start, 'EEE d MMM, HH:mm')}</dd>
