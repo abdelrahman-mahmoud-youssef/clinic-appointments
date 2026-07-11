@@ -6,7 +6,18 @@ import { useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, ToolbarProps } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, startOfDay, endOfDay, getDay, set } from 'date-fns';
+import {
+  format,
+  parse,
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  getDay,
+  set,
+} from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -78,16 +89,26 @@ function ToolbarAdapter(props: ToolbarProps<CalendarEvent, object>) {
   );
 }
 
-function computeInitialRange(): DateRange {
-  const now = new Date();
-  return { from: startOfDay(now), to: endOfDay(now) };
+export function visibleRange(date: Date, view: View): DateRange {
+  if (view === Views.MONTH) {
+    return {
+      from: startOfWeek(startOfMonth(date), { weekStartsOn: 0 }),
+      to: endOfWeek(endOfMonth(date), { weekStartsOn: 0 }),
+    };
+  }
+  if (view === Views.WEEK) {
+    return {
+      from: startOfWeek(date, { weekStartsOn: 0 }),
+      to: endOfWeek(date, { weekStartsOn: 0 }),
+    };
+  }
+  return { from: startOfDay(date), to: endOfDay(date) };
 }
 
 export function AppointmentCalendar() {
   const searchParams = useSearchParams();
   const setFilter = useSetFilter();
 
-  const [range, setRange] = useState<DateRange>(computeInitialRange);
   const [view, setView] = useState<View>(Views.DAY);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date; doctorId?: string } | null>(
     null,
@@ -114,6 +135,7 @@ export function AppointmentCalendar() {
     () => (dateParam ? new Date(`${dateParam}T00:00:00`) : new Date()),
     [dateParam],
   );
+  const range = useMemo(() => visibleRange(date, view), [date, view]);
 
   const { data: appointments = [] } = useQuery({
     queryKey: [
@@ -189,14 +211,6 @@ export function AppointmentCalendar() {
     },
     [doctorFilter, doctorWindows, clinicSettings],
   );
-
-  const handleRangeChange = useCallback((newRange: Date[] | { start: Date; end: Date }) => {
-    if (Array.isArray(newRange)) {
-      setRange({ from: startOfDay(newRange[0]), to: endOfDay(newRange[newRange.length - 1]) });
-    } else {
-      setRange({ from: startOfDay(newRange.start), to: endOfDay(newRange.end) });
-    }
-  }, []);
 
   const eventPropGetter = useCallback((event: CalendarEvent) => {
     const color = STATUS_COLORS[event.resource.status];
@@ -318,7 +332,6 @@ export function AppointmentCalendar() {
           timeslots={1}
           min={minTime}
           max={maxTime}
-          onRangeChange={handleRangeChange}
           eventPropGetter={eventPropGetter}
           slotPropGetter={slotPropGetter}
           selectable={canBook}
