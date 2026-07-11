@@ -1,4 +1,4 @@
-import { getToken } from '@/lib/auth/token-store';
+import { getToken, setToken } from '@/lib/auth/token-store';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -26,6 +26,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      setToken(null);
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
     const body = await response.json().catch(() => ({}));
     throw new ApiError(
       response.status,
