@@ -30,6 +30,10 @@ export class UsersRepository {
     return this.prisma.doctor.count({ where: { id: doctorId, clinicId } }).then((count) => count > 0);
   }
 
+  doctorLinked(doctorId: string): Promise<boolean> {
+    return this.prisma.user.count({ where: { doctorId } }).then((count) => count > 0);
+  }
+
   create(data: Prisma.UserUncheckedCreateInput) {
     return this.prisma.user.create({ data, select: PUBLIC_FIELDS });
   }

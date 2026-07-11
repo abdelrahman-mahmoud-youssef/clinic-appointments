@@ -21,8 +21,13 @@ export class UsersService {
     }
 
     const doctorId = dto.role === Role.DOCTOR ? dto.doctorId : undefined;
-    if (doctorId && !(await this.usersRepository.doctorInClinic(doctorId, clinicId))) {
-      throw new CrossTenantAccessError(`Doctor ${doctorId} not found in this clinic`);
+    if (doctorId) {
+      if (!(await this.usersRepository.doctorInClinic(doctorId, clinicId))) {
+        throw new CrossTenantAccessError(`Doctor ${doctorId} not found in this clinic`);
+      }
+      if (await this.usersRepository.doctorLinked(doctorId)) {
+        throw new ConflictException('This doctor is already linked to a user account');
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
