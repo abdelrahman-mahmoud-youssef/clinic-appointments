@@ -18,7 +18,7 @@ export class WeeklyWindowDto {
 
 export class SetAvailabilityDto {
   @IsArray()
-  @ArrayMaxSize(7)
+  @ArrayMaxSize(21)
   @ValidateNested({ each: true })
   @Type(() => WeeklyWindowDto)
   windows!: WeeklyWindowDto[];

@@ -9,6 +9,8 @@ interface DoctorSeed {
   name: string;
   startTime: string;
   endTime: string;
+  breakStart?: string;
+  breakEnd?: string;
 }
 
 interface ClinicSeed {
@@ -30,7 +32,7 @@ const CLINICS: ClinicSeed[] = [
     dayEndHour: 21,
     doctors: [
       { name: 'Dr. Ahmed Hassan', startTime: '10:00', endTime: '18:00' },
-      { name: 'Dr. Mona Saleh', startTime: '12:00', endTime: '20:00' },
+      { name: 'Dr. Mona Saleh', startTime: '12:00', endTime: '20:00', breakStart: '15:00', breakEnd: '16:00' },
     ],
     patients: ['Omar Ali', 'Fatma Ibrahim', 'Khaled Mostafa', 'Nour Adel'],
   },
@@ -167,14 +169,23 @@ async function main() {
       const doctor = await prisma.doctor.create({
         data: { clinicId: clinic.id, name: doctorSeed.name },
       });
+      const shifts =
+        doctorSeed.breakStart && doctorSeed.breakEnd
+          ? [
+              { startTime: doctorSeed.startTime, endTime: doctorSeed.breakStart },
+              { startTime: doctorSeed.breakEnd, endTime: doctorSeed.endTime },
+            ]
+          : [{ startTime: doctorSeed.startTime, endTime: doctorSeed.endTime }];
       await prisma.doctorAvailability.createMany({
-        data: WORK_DAYS.map((weekday) => ({
-          clinicId: clinic.id,
-          doctorId: doctor.id,
-          weekday,
-          startTime: doctorSeed.startTime,
-          endTime: doctorSeed.endTime,
-        })),
+        data: WORK_DAYS.flatMap((weekday) =>
+          shifts.map((shift) => ({
+            clinicId: clinic.id,
+            doctorId: doctor.id,
+            weekday,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+          })),
+        ),
       });
 
       const email = `${doctorEmailLocalPart(doctorSeed.name)}@${seed.slug}.test`;

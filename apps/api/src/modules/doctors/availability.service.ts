@@ -54,17 +54,12 @@ export class AvailabilityService {
     const clinic = await this.clinicsService.getSettings(clinicId);
     const openMinute = clinic.dayStartHour * 60;
     const closeMinute = clinic.dayEndHour * 60;
-    const seenWeekdays = new Set<number>();
+    const shiftsByWeekday = new Map<number, Array<{ start: number; end: number }>>();
 
     for (const window of windows) {
       const day = DAY_NAMES[window.weekday];
       const start = toMinutes(window.startTime);
       const end = toMinutes(window.endTime);
-
-      if (seenWeekdays.has(window.weekday)) {
-        throw new BadRequestException(`${day}: only one shift per day is allowed`);
-      }
-      seenWeekdays.add(window.weekday);
 
       if (end <= start) {
         throw new BadRequestException(`${day}: closing time must be after opening time`);
@@ -73,6 +68,19 @@ export class AvailabilityService {
         throw new BadRequestException(
           `${day}: hours must be within the clinic window (${formatMinutes(openMinute)}–${formatMinutes(closeMinute)})`,
         );
+      }
+
+      const shifts = shiftsByWeekday.get(window.weekday) ?? [];
+      shifts.push({ start, end });
+      shiftsByWeekday.set(window.weekday, shifts);
+    }
+
+    for (const [weekday, shifts] of shiftsByWeekday) {
+      shifts.sort((a, b) => a.start - b.start);
+      for (let i = 1; i < shifts.length; i += 1) {
+        if (shifts[i].start < shifts[i - 1].end) {
+          throw new BadRequestException(`${DAY_NAMES[weekday]}: shifts must not overlap`);
+        }
       }
     }
 

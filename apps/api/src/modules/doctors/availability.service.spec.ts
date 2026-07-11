@@ -151,13 +151,26 @@ describe('AvailabilityService', () => {
       ).rejects.toThrow(/after opening/);
     });
 
-    it('rejects more than one shift on the same day', async () => {
+    it('accepts a non-overlapping split shift on the same day', async () => {
+      const split = [
+        { weekday: 1, startTime: '09:00', endTime: '12:00' },
+        { weekday: 1, startTime: '13:00', endTime: '16:00' },
+      ];
+      repo.findByDoctor.mockResolvedValue(split);
+
+      await service.setWorkingHours('clinic-1', 'doctor-1', split);
+
+      expect(repo.replaceForDoctor).toHaveBeenCalledWith('clinic-1', 'doctor-1', split);
+    });
+
+    it('rejects overlapping shifts on the same day', async () => {
       await expect(
         service.setWorkingHours('clinic-1', 'doctor-1', [
-          { weekday: 1, startTime: '09:00', endTime: '12:00' },
-          { weekday: 1, startTime: '13:00', endTime: '16:00' },
+          { weekday: 1, startTime: '09:00', endTime: '13:00' },
+          { weekday: 1, startTime: '12:00', endTime: '16:00' },
         ]),
-      ).rejects.toThrow(/one shift per day/);
+      ).rejects.toThrow(/must not overlap/);
+      expect(repo.replaceForDoctor).not.toHaveBeenCalled();
     });
 
     it('rejects a doctor from another clinic', async () => {

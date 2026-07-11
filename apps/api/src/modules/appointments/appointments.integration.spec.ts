@@ -8,6 +8,7 @@ import { AppointmentsRepository } from './appointments.repository';
 import { AppointmentsService } from './appointments.service';
 import {
   CrossTenantAccessError,
+  DoctorUnavailableError,
   InvalidStatusTransitionError,
   OverlappingAppointmentError,
 } from '../../shared/errors/domain-errors';
@@ -319,6 +320,38 @@ describe('Appointments integration (real Postgres)', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].reason).toBe('Root canal');
+  });
+
+  it('honours a split shift: books both blocks, rejects the lunch gap', async () => {
+    const splitDoctor = await prisma.doctor.create({
+      data: { clinicId: clinicA.id, name: 'Split Shift Doctor' },
+    });
+    const weekday = new Date('2030-11-04T00:00:00Z').getUTCDay();
+    await prisma.doctorAvailability.createMany({
+      data: [
+        { clinicId: clinicA.id, doctorId: splitDoctor.id, weekday, startTime: '09:00', endTime: '12:00' },
+        { clinicId: clinicA.id, doctorId: splitDoctor.id, weekday, startTime: '13:00', endTime: '17:00' },
+      ],
+    });
+
+    const book = (startsAt: string, endsAt: string) =>
+      service.create({
+        clinicId: clinicA.id,
+        doctorId: splitDoctor.id,
+        patientId: patientA.id,
+        startsAt: new Date(startsAt),
+        endsAt: new Date(endsAt),
+        actorUserId: 'tester',
+      });
+
+    const morning = await book('2030-11-04T09:30:00Z', '2030-11-04T10:00:00Z');
+    const afternoon = await book('2030-11-04T13:30:00Z', '2030-11-04T14:00:00Z');
+    expect(morning.id).toBeDefined();
+    expect(afternoon.id).toBeDefined();
+
+    await expect(book('2030-11-04T12:15:00Z', '2030-11-04T12:45:00Z')).rejects.toThrow(
+      DoctorUnavailableError,
+    );
   });
 
   it('rejects editing a terminal appointment', async () => {
