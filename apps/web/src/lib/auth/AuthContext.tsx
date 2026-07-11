@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setRole(null);
     setIsAuthenticated(false);
-    router.push('/login');
+    window.location.href = '/login';
   }
 
   return (
