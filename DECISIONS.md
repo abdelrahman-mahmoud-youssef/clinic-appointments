@@ -500,6 +500,28 @@ it would add real surface area for a requirement nobody asked for here.
   the same breakpoint. One `AppointmentCalendar` component serves both
   form factors rather than maintaining a parallel mobile component tree.
 
+## Inline patient creation: client-orchestrated, no cross-entity transaction
+
+- The appointment form's patient field is a combobox: it searches existing
+  patients and offers an "add new patient" option that reveals a name field
+  inline. On submit with a new patient, the client does two calls — `POST
+  /patients` (clinic-scoped via the JWT, same `@Roles(RECEPTIONIST, ADMIN)`
+  guard as appointment creation) then `POST /appointments` with the returned
+  id.
+- **Failure handling: surface it, don't wrap in a transaction.** If patient
+  creation succeeds but the appointment fails (e.g. a 409 overlap), the form
+  stays open showing the error and the newly-created patient is left selected
+  in the combobox, so a retry with a different time reuses that same patient —
+  no duplicate, no silent orphan. This is deliberate over a DB transaction:
+  a created patient is a real clinic record (an actual person), not
+  transactional garbage — it's legitimately reusable, and the "partial" state
+  (patient exists, appointment doesn't) is a valid, useful outcome, not a
+  corruption to roll back. Wrapping both writes in one transaction would need
+  a new combined endpoint and a Prisma transaction client threaded through the
+  availability, overlap, and tenancy checks — real surface area to *undo* a
+  patient the user will most likely want to keep. The error is shown, not
+  swallowed, which is what "don't orphan silently" actually requires.
+
 ## Pagination: cursor-based on the list, none on the calendar
 
 - `GET /appointments` takes optional `limit` + `cursor`. When `limit` is

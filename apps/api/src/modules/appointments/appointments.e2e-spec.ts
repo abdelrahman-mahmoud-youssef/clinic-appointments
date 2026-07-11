@@ -145,4 +145,26 @@ describe('Appointments e2e (real HTTP layer)', () => {
       })
       .expect(403);
   });
+
+  it('creates a clinic-scoped patient for a receptionist', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/patients')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Walk-in Patient' })
+      .expect(201);
+
+    expect(res.body.name).toBe('Walk-in Patient');
+    expect(res.body.clinicId).toBe(clinicA.id);
+
+    const persisted = await prisma.patient.findUnique({ where: { id: res.body.id } });
+    expect(persisted?.clinicId).toBe(clinicA.id);
+  });
+
+  it('rejects a patient with a blank name with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/patients')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '   ' })
+      .expect(400);
+  });
 });

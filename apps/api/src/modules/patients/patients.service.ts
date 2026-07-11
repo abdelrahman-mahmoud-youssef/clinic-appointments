@@ -9,4 +9,8 @@ export class PatientsService {
   list(clinicId: string): Promise<Patient[]> {
     return this.patientsRepository.findAllByClinic(clinicId);
   }
+
+  create(clinicId: string, name: string): Promise<Patient> {
+    return this.patientsRepository.create(clinicId, name);
+  }
 }

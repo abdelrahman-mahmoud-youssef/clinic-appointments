@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Appointment, createAppointment, updateAppointment } from '@/lib/api/appointments';
 import { listDoctors } from '@/lib/api/doctors';
-import { listPatients } from '@/lib/api/patients';
+import { createPatient, listPatients } from '@/lib/api/patients';
 import { extractErrorMessage } from '@/lib/api/errorMessage';
 import { toDateTimeLocalValue } from '@/lib/dateInput';
 import { Modal } from '@/components/ui/Modal';
 import { Field, Input, Select, Textarea } from '@/components/ui/FormControls';
 import { Button } from '@/components/ui/Button';
 import { Banner } from '@/components/ui/Banner';
+import { PatientCombobox, PatientChoice } from './PatientCombobox';
 
 interface Props {
   onClose: () => void;
@@ -43,7 +44,9 @@ export function AppointmentFormModal({
   const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: listDoctors });
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: listPatients });
 
-  const [patientId, setPatientId] = useState(appointment?.patientId ?? '');
+  const [patientChoice, setPatientChoice] = useState<PatientChoice>(
+    appointment?.patientId ? { patientId: appointment.patientId } : {},
+  );
   const [doctorId, setDoctorId] = useState(appointment?.doctorId ?? defaultDoctorId ?? '');
   const [startsAt, setStartsAt] = useState(
     toDateTimeLocalValue(appointment ? new Date(appointment.startsAt) : defaultStart ?? fallback.start),
@@ -55,9 +58,18 @@ export function AppointmentFormModal({
   const [notes, setNotes] = useState(appointment?.notes ?? '');
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      let resolvedPatientId = patientChoice.patientId;
+
+      if (patientChoice.newPatientName !== undefined) {
+        const created = await createPatient(patientChoice.newPatientName.trim());
+        resolvedPatientId = created.id;
+        queryClient.invalidateQueries({ queryKey: ['patients'] });
+        setPatientChoice({ patientId: created.id });
+      }
+
       const payload = {
-        patientId,
+        patientId: resolvedPatientId!,
         doctorId,
         startsAt: new Date(startsAt).toISOString(),
         endsAt: new Date(endsAt).toISOString(),
@@ -72,8 +84,15 @@ export function AppointmentFormModal({
     },
   });
 
+  const patientReady =
+    !!patientChoice.patientId ||
+    (patientChoice.newPatientName !== undefined && patientChoice.newPatientName.trim().length > 0);
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!patientReady) {
+      return;
+    }
     save.mutate();
   }
 
@@ -81,16 +100,7 @@ export function AppointmentFormModal({
     <Modal title={editing ? 'Edit appointment' : 'New appointment'} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <Field label="Patient">
-          <Select value={patientId} onChange={(event) => setPatientId(event.target.value)} required>
-            <option value="" disabled>
-              Select a patient
-            </option>
-            {patients.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.name}
-              </option>
-            ))}
-          </Select>
+          <PatientCombobox patients={patients} value={patientChoice} onChange={setPatientChoice} />
         </Field>
 
         <Field label="Doctor">
@@ -145,7 +155,7 @@ export function AppointmentFormModal({
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={save.isPending}>
+          <Button type="submit" variant="primary" disabled={save.isPending || !patientReady}>
             {save.isPending
               ? editing
                 ? 'Saving…'
