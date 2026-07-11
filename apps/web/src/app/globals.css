@@ -145,6 +145,7 @@
 
   .calendar-day .rbc-event {
     cursor: grab;
+    touch-action: none;
   }
 
   .calendar-bookable .rbc-time-slot:not(.slot-closed):hover::after {

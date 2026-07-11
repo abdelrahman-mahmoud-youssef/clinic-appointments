@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { AppointmentStatus, isWithinWorkingHours, Role } from '@clinic/shared';
@@ -110,7 +110,6 @@ export function AppointmentCalendar() {
   const setFilter = useSetFilter();
 
   const [view, setView] = useState<View>(Views.DAY);
-  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [pendingSlot, setPendingSlot] = useState<{ start: Date; end: Date; doctorId?: string } | null>(
     null,
   );
@@ -137,10 +136,6 @@ export function AppointmentCalendar() {
     [dateParam],
   );
   const range = useMemo(() => visibleRange(date, view), [date, view]);
-
-  useEffect(() => {
-    setIsCoarsePointer(window.matchMedia('(pointer: coarse)').matches);
-  }, []);
 
   const { data: appointments = [] } = useQuery({
     queryKey: [
@@ -363,7 +358,7 @@ export function AppointmentCalendar() {
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onEventDrop={handleEventDrop}
-          draggableAccessor={() => canBook && view === Views.DAY && !isCoarsePointer}
+          draggableAccessor={() => canBook && view === Views.DAY}
           resizable={false}
           style={{ height: '100%' }}
           startAccessor="start"

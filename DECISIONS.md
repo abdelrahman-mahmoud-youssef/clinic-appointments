@@ -570,7 +570,7 @@ it would add real surface area for a requirement nobody asked for here.
   arbitrary date ranges, needs pages (a "Load more" button via
   `useInfiniteQuery`).
 
-## Frontend: drag-reschedule is Day-view + pointer only, form is the universal path
+## Frontend: drag-reschedule is Day-view only, works on pointer and touch
 
 - Drag-to-reschedule is enabled only in **Day view** (`draggableAccessor`
   gated on `view === Views.DAY`). Day view is the only one with a
@@ -579,14 +579,15 @@ it would add real surface area for a requirement nobody asked for here.
   which isn't a reschedule anyone means. Rescheduling from Week/Month (and
   any full edit) goes through the form instead: click an appointment →
   details → Edit, with explicit start/end inputs.
-- Drag is also disabled on **coarse-pointer (touch) devices**
-  (`window.matchMedia('(pointer: coarse)')`, read post-mount to avoid an SSR
-  hydration mismatch). react-big-calendar's DnD addon does support touch via
-  a long-press (its `Selection` layer binds touch events, not HTML5 drag),
-  but on mobile it competes with page scroll — the addon only registers a
-  passive `touchmove` listener, so it can't reliably `preventDefault` the
-  scroll, and the result is a janky, undiscoverable half-drag. Rather than
-  ship that, touch users get the same universal path: tapping an appointment
-  opens its details, where reschedule/edit via the form works cleanly on
-  touch. This is a deliberate fallback, not a missing feature — the form
-  route already exists and covers every view and every input device.
+- Drag works on **touch as well as pointer**. react-big-calendar's DnD addon
+  supports touch via a long-press (its `Selection` layer binds touch events,
+  not HTML5 drag). The catch is that touch-drag competes with page scroll —
+  the addon only registers a passive `touchmove` listener, so it can't
+  `preventDefault` the scroll on its own. The fix is `touch-action: none` on
+  the draggable event (`.calendar-day .rbc-event` in `globals.css`), which
+  tells the browser not to treat touch gestures on an event as scroll/zoom,
+  handing the `touchmove` to rbc so the long-press-drag runs. It's scoped to
+  the Day view's events only, so the time grid still scrolls normally when you
+  drag on empty slots. A short tap still opens the details modal; a held
+  long-press (rbc's 250ms default) starts the drag. The form route remains the
+  universal fallback for any view and any device.
